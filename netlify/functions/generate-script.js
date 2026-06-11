@@ -47,7 +47,7 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { topic, slot } = body; // slot: "matin" | "midi" | "soir" (optionnel, pour orienter le ton)
+  const { topic, slot } = body;
 
   const userPrompt = topic
     ? `Sujet imposé : ${topic}${slot ? `\nCréneau de publication visé : ${slot}` : ""}\n\nGénère le script Shorts complet au format JSON demandé.`
@@ -66,14 +66,13 @@ export default async (req, context) => {
         max_tokens: 1500,
         system: SHORTS_SYSTEM_PROMPT,
         messages: [{ role: "user", content: userPrompt }],
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
       }),
     });
 
     const data = await anthropicRes.json();
 
     if (!anthropicRes.ok) {
-      return new Response(JSON.stringify({ error: data.error?.message || "Erreur API Anthropic" }), {
+      return new Response(JSON.stringify({ error: data.error?.message || "Erreur API Anthropic", raw: data }), {
         status: anthropicRes.status,
         headers: { "Content-Type": "application/json" },
       });
@@ -83,6 +82,13 @@ export default async (req, context) => {
       .filter((b) => b.type === "text")
       .map((b) => b.text)
       .join("");
+
+    if (!text) {
+      return new Response(
+        JSON.stringify({ error: "Réponse vide de Claude (aucun bloc texte)", raw: data }),
+        { status: 502, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     let script;
     try {
