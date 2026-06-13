@@ -149,12 +149,48 @@ export default function JarvisApp() {
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioError, setAudioError] = useState(null);
+  const [voiceId, setVoiceId] = useState("KGV4bLP8m7z8zXo2kC2X"); // voix FR choisie
+  const [voiceIdInput, setVoiceIdInput] = useState("KGV4bLP8m7z8zXo2kC2X");
+  const [voiceSaved, setVoiceSaved] = useState(false);
+
+  // Pipeline Shorts (Phase 3 — visuels)
+  const [visualsLoading, setVisualsLoading] = useState(false);
+  const [visuals, setVisuals] = useState(null);
+  const [visualsError, setVisualsError] = useState(null);
+
+  const handleFetchVisuals = async () => {
+    if (!pipelineScript) return;
+    setVisualsLoading(true);
+    setVisuals(null);
+    setVisualsError(null);
+    try {
+      const res = await fetch("/api/fetch-visuals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ segments: pipelineScript.narration_segments || [] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+      setVisuals(data);
+      addToLog({
+        type: "VISUELS",
+        decision: `${data.total - data.missing}/${data.total} clips récupérés (Pexels)`,
+        rationale: data.missing > 0 ? `${data.missing} segment(s) sans visuel trouvé` : "Tous les segments ont un visuel",
+        kpi: "Phase 3 ✓",
+      });
+    } catch (e) {
+      setVisualsError(e.message);
+    }
+    setVisualsLoading(false);
+  };
+
 
   const handleGenerateScript = async () => {
     setPipelineLoading(true);
     setPipelineScript(null);
     setPipelineError(null);
     setAudioUrl(null);
+    setVisuals(null);
     try {
       const res = await fetch("/api/generate-script", {
         method: "POST",
@@ -193,7 +229,7 @@ export default function JarvisApp() {
       const res = await fetch("/api/generate-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: fullText }),
+        body: JSON.stringify({ text: fullText, voiceId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur inconnue");
@@ -553,9 +589,60 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                       </div>
                     )}
                     <div style={{ marginTop: 12, fontSize: 11, color: T.muted, fontFamily: T.mono, lineHeight: 1.8 }}>
-                      → Phase 3 : récupération des clips vidéo correspondant aux mots-clés<br />
                       → Phase 4 : assemblage automatique via Shotstack
                     </div>
+                  </div>
+
+                  {/* PHASE 3 — VISUELS */}
+                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      ◈ Phase 3 — Visuels (Pexels)
+                    </div>
+                    <button
+                      onClick={handleFetchVisuals}
+                      disabled={visualsLoading}
+                      style={{
+                        padding: "10px 22px", background: visualsLoading ? T.accentDim : T.accent,
+                        color: T.bg0, border: "none", borderRadius: 8,
+                        cursor: visualsLoading ? "not-allowed" : "pointer",
+                        fontWeight: 800, fontSize: 13, fontFamily: T.mono,
+                      }}
+                    >
+                      {visualsLoading ? <>RECHERCHE VISUELS <Spinner /></> : "🎬 RÉCUPÉRER LES VISUELS"}
+                    </button>
+                    {visualsError && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: T.red, lineHeight: 1.6 }}>{visualsError}</div>
+                    )}
+                    {visuals && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 12, color: visuals.missing > 0 ? T.accent : T.green, marginBottom: 10, fontFamily: T.mono }}>
+                          {visuals.total - visuals.missing}/{visuals.total} clips trouvés
+                          {visuals.missing > 0 && ` · ${visuals.missing} sans visuel`}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
+                          {visuals.clips.map((c, i) => (
+                            <div key={i} style={{
+                              borderRadius: 6, overflow: "hidden", border: `1px solid ${T.border}`,
+                              aspectRatio: "9/16", background: T.bg2, position: "relative",
+                            }}>
+                              {c.clip ? (
+                                <img src={c.clip.preview} alt={c.query} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              ) : (
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 9, color: T.red, textAlign: "center", padding: 4 }}>
+                                  aucun clip<br />"{c.query}"
+                                </div>
+                              )}
+                              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.6)", fontSize: 9, color: "#fff", padding: "2px 4px", fontFamily: T.mono }}>
+                                #{i + 1}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 10, fontSize: 11, color: T.muted, fontFamily: T.mono, lineHeight: 1.6 }}>
+                          Aperçus des clips qui seront assemblés en Phase 4. Clips fournis par Pexels.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -731,6 +818,45 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                     <span style={{ fontSize: 12, color: T.green, fontFamily: T.mono }}>Rapports activés → {savedEmail}</span>
                   </div>
                 )}
+              </div>
+
+              {/* VOICE ID SECTION */}
+              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  ◈ Voix off — Voice ID ElevenLabs
+                </div>
+                <p style={{ fontSize: 12, color: T.muted, marginBottom: 16, lineHeight: 1.7 }}>
+                  Change la voix de narration sans repasser par Netlify. Récupère un Voice ID dans ElevenLabs (Voice Library → choisis une voix française → "ID" ou "Copy Voice ID") et colle-le ici.
+                </p>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input
+                    type="text"
+                    value={voiceIdInput}
+                    onChange={e => { setVoiceIdInput(e.target.value); setVoiceSaved(false); }}
+                    placeholder="Voice ID (ex: KGV4bLP8m7z8zXo2kC2X)"
+                    style={{
+                      flex: 1, background: T.bg0, border: `1px solid ${T.border}`,
+                      borderRadius: 6, padding: "10px 14px", color: T.text, fontSize: 13,
+                      fontFamily: T.mono, outline: "none",
+                    }}
+                  />
+                  <button onClick={() => { if (voiceIdInput.trim()) { setVoiceId(voiceIdInput.trim()); setVoiceSaved(true); } }} style={{
+                    padding: "10px 20px", background: T.accent, color: T.bg0,
+                    border: "none", borderRadius: 6, cursor: "pointer",
+                    fontWeight: 700, fontSize: 13, fontFamily: T.mono,
+                  }}>
+                    APPLIQUER
+                  </button>
+                </div>
+                <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: voiceSaved ? T.green : T.muted }} />
+                  <span style={{ fontSize: 12, color: voiceSaved ? T.green : T.muted, fontFamily: T.mono }}>
+                    {voiceSaved ? "Voix mise à jour ✓" : `Voix active : ${voiceId}`}
+                  </span>
+                </div>
+                <div style={{ marginTop: 12, padding: 10, background: `${T.blue}11`, borderRadius: 6, fontSize: 11, color: T.muted, lineHeight: 1.6 }}>
+                  Note : ce réglage s'applique pendant ta session. Quand l'automatisation tournera (Phase 6), la voix par défaut restera celle configurée dans Netlify (ELEVENLABS_VOICE_ID).
+                </div>
               </div>
 
               {/* YOUTUBE API SECTION */}
