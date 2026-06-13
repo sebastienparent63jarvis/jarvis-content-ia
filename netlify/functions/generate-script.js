@@ -25,7 +25,8 @@ Pour CHAQUE script, applique ces règles :
 2. Corps (3-45s) : 1 idée actionnable, claire, en français courant — pas de jargon
 3. CTA final (45-55s) : incitation à s'abonner ou commenter, naturelle (pas insistante)
 4. Le texte de narration doit être écrit pour être lu à voix haute (phrases courtes, rythme oral)
-5. Pour chaque segment, propose 2-3 mots-clés en ANGLAIS pour rechercher des visuels libres de droits (banques d'images en anglais)
+5. IMPORTANT pour la voix off : dans le champ "text" de narration, écris TOUS les nombres, montants et pourcentages EN TOUTES LETTRES (ex: "mille cinq cents euros" et non "1500€", "vingt-cinq pour cent" et non "25%", "dix mille" et non "10k"). N'utilise aucun symbole (€, %, $, k) dans le texte de narration — ils sont mal lus par la synthèse vocale. Tu peux les garder en chiffres dans le titre et la description (qui sont affichés, pas lus).
+6. Pour chaque segment, propose 2-3 mots-clés en ANGLAIS pour rechercher des visuels libres de droits (banques d'images en anglais)
 
 Réponds UNIQUEMENT en JSON valide, structure exacte :
 {
