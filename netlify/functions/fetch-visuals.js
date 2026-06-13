@@ -62,7 +62,10 @@ export default async (req, context) => {
 
       // On tente la requête complète, puis on dégrade vers le premier mot-clé
       // si aucun résultat, pour maximiser les chances de trouver un visuel.
-      const attempts = [query, keywords[0], "finance business"].filter(Boolean);
+      // Le dernier recours reste dans un registre pro (pas de cliché finance).
+      const proFallbacks = ["modern office professional", "business workspace cinematic", "city skyline business"];
+      const lastResort = proFallbacks[Math.floor(Math.random() * proFallbacks.length)];
+      const attempts = [query, keywords[0], lastResort].filter(Boolean);
 
       for (const attempt of attempts) {
         const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(attempt)}&orientation=portrait&per_page=5`;

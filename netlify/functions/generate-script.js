@@ -26,7 +26,13 @@ Pour CHAQUE script, applique ces règles :
 3. CTA final (45-55s) : incitation à s'abonner ou commenter, naturelle (pas insistante)
 4. Le texte de narration doit être écrit pour être lu à voix haute (phrases courtes, rythme oral)
 5. IMPORTANT pour la voix off : dans le champ "text" de narration, écris TOUS les nombres, montants et pourcentages EN TOUTES LETTRES (ex: "mille cinq cents euros" et non "1500€", "vingt-cinq pour cent" et non "25%", "dix mille" et non "10k"). N'utilise aucun symbole (€, %, $, k) dans le texte de narration — ils sont mal lus par la synthèse vocale. Tu peux les garder en chiffres dans le titre et la description (qui sont affichés, pas lus).
-6. Pour chaque segment, propose 2-3 mots-clés en ANGLAIS pour rechercher des visuels libres de droits (banques d'images en anglais)
+6. ÉVITE les homographes ambigus qui trompent la synthèse vocale — surtout les verbes qui s'écrivent comme un nom courant. Exemples à reformuler : "tu paramètres" (verbe) → préfère "tu programmes" ou "tu règles" ; "tu places" → "tu investis" ; "ils content" → "ils racontent". Si un mot peut se lire comme deux natures grammaticales différentes (nom/verbe), choisis un synonyme sans ambiguïté.
+7. Pour chaque segment, propose 2-3 mots-clés en ANGLAIS pour rechercher des visuels libres de droits.
+   REGISTRE VISUEL — important : le TEXTE doit rester accessible et grand public, mais les VISUELS doivent être sérieux, élégants et professionnels (esthétique premium, crédible, type chaîne finance haut de gamme). Pour cela, oriente les mots-clés visuels vers ce registre :
+   - PRIVILÉGIE : "professional businesswoman laptop", "modern office finance", "stock market screen", "elegant minimal workspace", "financial charts monitor", "person reviewing documents", "city skyline business district", "luxury minimal interior", "handshake meeting", "calm professional working"
+   - ÉVITE : les visuels caricaturaux, kitsch ou "stock cliché" (piles de pièces, billets qui pleuvent, cochons-tirelires, mains tenant des liasses, flèches dessinées). Ils décrédibilisent.
+   - Ajoute si pertinent un mot d'ambiance pro : "cinematic", "clean", "modern", "professional" pour relever la qualité visuelle.
+   Les mots-clés doivent rester concrets et faciles à trouver sur une banque d'images (pas de concepts abstraits comme "financial freedom" qui ne donnent rien de visuel).
 
 Réponds UNIQUEMENT en JSON valide, structure exacte :
 {
