@@ -8,6 +8,18 @@ const SHORTS_SYSTEM_PROMPT = `Tu es JARVIS, moteur éditorial autonome pour une 
 
 Format cible : Shorts de 45 à 60 secondes, vertical (9:16).
 
+DIVERSITÉ OBLIGATOIRE — c'est ta contrainte la plus importante :
+Tu produis plusieurs scripts par jour. La répétition de sujets tue la chaîne. Tu DOIS faire tourner les catégories suivantes et ne jamais traiter deux fois de suite le même angle :
+- Épargne & gestion de budget
+- Investissement (bourse, ETF, immobilier, crypto)
+- Outils IA concrets et NOMMÉS (ex: une app précise, un usage précis) — varie l'outil à chaque fois
+- Fiscalité & optimisation légale
+- Pièges et arnaques financières à éviter
+- Psychologie de l'argent & habitudes
+- Revenus complémentaires / side business
+- Décryptage d'une actu ou tendance financière
+Si une liste de sujets déjà traités t'est fournie, tu dois ABSOLUMENT choisir un angle ET une catégorie différents. Pas de variation cosmétique d'un même sujet (ex: "l'IA gère ton budget" puis "l'IA analyse tes dépenses" = INTERDIT, c'est le même sujet).
+
 Pour CHAQUE script, applique ces règles :
 1. Hook (0-3s) : phrase choc, chiffre ou question qui arrête le scroll
 2. Corps (3-45s) : 1 idée actionnable, claire, en français courant — pas de jargon
@@ -18,6 +30,7 @@ Pour CHAQUE script, applique ces règles :
 Réponds UNIQUEMENT en JSON valide, structure exacte :
 {
   "title": "Titre YouTube optimisé CTR (max 60 caractères)",
+  "category": "La catégorie choisie parmi la liste ci-dessus",
   "description": "Description YouTube avec 3-5 hashtags pertinents",
   "narration_segments": [
     { "text": "texte à lire pour ce segment", "duration_estimate_sec": 5, "visual_keywords": ["keyword1", "keyword2"] }
@@ -47,11 +60,15 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { topic, slot } = body;
+  const { topic, slot, recentTopics } = body; // slot: créneau ; recentTopics: titres déjà produits
+
+  const avoidBlock = (Array.isArray(recentTopics) && recentTopics.length > 0)
+    ? `\n\nSUJETS DÉJÀ TRAITÉS RÉCEMMENT (à NE PAS répéter, ni en sujet ni en angle) :\n${recentTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nChoisis impérativement une catégorie ET un angle différents de tout ce qui précède.`
+    : "";
 
   const userPrompt = topic
-    ? `Sujet imposé : ${topic}${slot ? `\nCréneau de publication visé : ${slot}` : ""}\n\nGénère le script Shorts complet au format JSON demandé.`
-    : `Aucun sujet imposé. Choisis toi-même un angle pertinent pour aujourd'hui dans la niche Finance Personnelle x IA, en t'appuyant sur les tendances actuelles.${slot ? `\nCréneau de publication visé : ${slot}` : ""}\n\nGénère le script Shorts complet au format JSON demandé.`;
+    ? `Sujet imposé : ${topic}${slot ? `\nCréneau de publication visé : ${slot}` : ""}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`
+    : `Aucun sujet imposé. Choisis toi-même un angle pertinent pour aujourd'hui dans la niche Finance Personnelle x IA, en t'appuyant sur les tendances actuelles.${slot ? `\nCréneau de publication visé : ${slot}` : ""}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`;
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {

@@ -145,30 +145,34 @@ export default function JarvisApp() {
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [pipelineScript, setPipelineScript] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
-
-  const SLOTS = [
-    { id: "matin", label: "Matin", time: "07h30", desc: "Routine / motivation" },
-    { id: "midi", label: "Midi", time: "12h30", desc: "Pause active" },
-    { id: "soir", label: "Soir", time: "19h30", desc: "Pic d'audience" },
-  ];
+  const [recentTopics, setRecentTopics] = useState([]); // anti-répétition
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [audioError, setAudioError] = useState(null);
 
   const handleGenerateScript = async () => {
     setPipelineLoading(true);
     setPipelineScript(null);
     setPipelineError(null);
+    setAudioUrl(null);
     try {
       const res = await fetch("/api/generate-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: pipelineTopic.trim() || undefined, slot: pipelineSlot }),
+        body: JSON.stringify({
+          topic: pipelineTopic.trim() || undefined,
+          slot: pipelineSlot,
+          recentTopics: recentTopics.slice(0, 15),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur inconnue");
       setPipelineScript(data.script);
+      setRecentTopics(prev => [data.script.title, ...prev].slice(0, 30));
       addToLog({
         type: "SCRIPT SHORTS",
         decision: data.script.title,
-        rationale: data.script.rationale || "",
+        rationale: (data.script.category ? `[${data.script.category}] ` : "") + (data.script.rationale || ""),
         kpi: `~${data.script.total_duration_estimate_sec}s · créneau ${pipelineSlot}`,
       });
     } catch (e) {
@@ -176,6 +180,43 @@ export default function JarvisApp() {
     }
     setPipelineLoading(false);
   };
+
+
+  // Pipeline Shorts (Phase 2 — voix off)
+  const handleGenerateAudio = async () => {
+    if (!pipelineScript) return;
+    setAudioLoading(true);
+    setAudioUrl(null);
+    setAudioError(null);
+    const fullText = (pipelineScript.narration_segments || []).map(s => s.text).join(" ");
+    try {
+      const res = await fetch("/api/generate-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: fullText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+      const url = `data:${data.mime};base64,${data.audio_base64}`;
+      setAudioUrl(url);
+      addToLog({
+        type: "VOIX OFF",
+        decision: `Audio généré pour "${pipelineScript.title}"`,
+        rationale: `${data.chars_used} caractères ElevenLabs consommés`,
+        kpi: "Phase 2 ✓",
+      });
+    } catch (e) {
+      setAudioError(e.message);
+    }
+    setAudioLoading(false);
+  };
+
+
+  const SLOTS = [
+    { id: "matin", label: "Matin", time: "07h30", desc: "Routine / motivation" },
+    { id: "midi", label: "Midi", time: "12h30", desc: "Pause active" },
+    { id: "soir", label: "Soir", time: "19h30", desc: "Pic d'audience" },
+  ];
 
 
   // Pulse animation on new log entry
@@ -484,10 +525,37 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                     <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>{pipelineScript.rationale}</div>
                   </div>
 
-                  <div style={{ marginTop: 16, padding: 12, background: T.bg0, borderRadius: 8, fontSize: 11, color: T.muted, fontFamily: T.mono, lineHeight: 1.8 }}>
-                    → Phase 2 (à venir) : ce script sera envoyé à ElevenLabs pour générer la voix off<br />
-                    → Phase 3 : récupération des clips vidéo correspondant aux mots-clés<br />
-                    → Phase 4 : assemblage automatique via Shotstack
+                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      ◈ Phase 2 — Voix off (ElevenLabs)
+                    </div>
+                    <button
+                      onClick={handleGenerateAudio}
+                      disabled={audioLoading}
+                      style={{
+                        padding: "10px 22px", background: audioLoading ? T.accentDim : T.accent,
+                        color: T.bg0, border: "none", borderRadius: 8,
+                        cursor: audioLoading ? "not-allowed" : "pointer",
+                        fontWeight: 800, fontSize: 13, fontFamily: T.mono,
+                      }}
+                    >
+                      {audioLoading ? <>GÉNÉRATION AUDIO <Spinner /></> : "♪ GÉNÉRER LA VOIX OFF"}
+                    </button>
+                    {audioError && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: T.red, lineHeight: 1.6 }}>{audioError}</div>
+                    )}
+                    {audioUrl && (
+                      <div style={{ marginTop: 12 }}>
+                        <audio controls src={audioUrl} style={{ width: "100%" }} />
+                        <div style={{ fontSize: 11, color: T.muted, marginTop: 6, fontFamily: T.mono }}>
+                          Écoute et valide la voix avant la Phase 4 (assemblage vidéo)
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ marginTop: 12, fontSize: 11, color: T.muted, fontFamily: T.mono, lineHeight: 1.8 }}>
+                      → Phase 3 : récupération des clips vidéo correspondant aux mots-clés<br />
+                      → Phase 4 : assemblage automatique via Shotstack
+                    </div>
                   </div>
                 </div>
               )}
