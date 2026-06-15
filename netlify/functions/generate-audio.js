@@ -14,6 +14,15 @@
 function normalizeForTTS(input) {
   let t = input;
 
+  // Correction d'homographes verbe/nom qui trompent le TTS (filet de sécurité,
+  // en complément des instructions données au générateur de scripts).
+  // On remplace la forme verbale ambiguë par un synonyme non ambigu.
+  const homographs = [
+    [/\btu param[èe]tres\b/gi, "tu programmes"],
+    [/\bje param[èe]tre\b/gi, "je programme"],
+  ];
+  for (const [re, rep] of homographs) t = t.replace(re, rep);
+
   // Abréviation "k" accolée à un nombre : 10k -> 10 mille, 1.5k -> 1500
   t = t.replace(/(\d+)[.,](\d+)\s*k\b/gi, (_, a, b) => `${a} mille ${b} cent`);
   t = t.replace(/(\d+)\s*k\b/gi, (_, a) => `${a} mille`);

@@ -148,6 +148,7 @@ export default function JarvisApp() {
   const [recentTopics, setRecentTopics] = useState([]); // anti-répétition
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
+  const [audioUrlHosted, setAudioUrlHosted] = useState(null); // URL publique pour Shotstack
   const [audioError, setAudioError] = useState(null);
   const [voiceId, setVoiceId] = useState("KGV4bLP8m7z8zXo2kC2X"); // voix FR choisie
   const [voiceIdInput, setVoiceIdInput] = useState("KGV4bLP8m7z8zXo2kC2X");
@@ -157,6 +158,70 @@ export default function JarvisApp() {
   const [visualsLoading, setVisualsLoading] = useState(false);
   const [visuals, setVisuals] = useState(null);
   const [visualsError, setVisualsError] = useState(null);
+
+  // Pipeline Shorts (Phase 4 — assemblage vidéo)
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoStatus, setVideoStatus] = useState(null); // texte d'étape en cours
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [videoError, setVideoError] = useState(null);
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  const handleAssembleVideo = async () => {
+    if (!pipelineScript || !audioUrlHosted || !visuals) return;
+    setVideoLoading(true);
+    setVideoUrl(null);
+    setVideoError(null);
+    setVideoStatus("Envoi de la recette de montage à Shotstack…");
+    try {
+      // 1. Lance l'assemblage
+      const res = await fetch("/api/assemble-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audioUrl: audioUrlHosted,
+          segments: pipelineScript.narration_segments || [],
+          clips: visuals.clips || [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur assemblage");
+
+      const renderId = data.render_id;
+      if (!renderId) throw new Error("Pas d'ID de rendu retourné");
+
+      // 2. Sonde le statut jusqu'à done/failed (max ~3 min)
+      setVideoStatus("Rendu vidéo en cours sur le cloud Shotstack…");
+      let attempts = 0;
+      const maxAttempts = 60; // 60 x 3s = 3 min
+      while (attempts < maxAttempts) {
+        await sleep(3000);
+        attempts++;
+        const stRes = await fetch(`/api/render-status?id=${encodeURIComponent(renderId)}`);
+        const st = await stRes.json();
+        if (!stRes.ok) throw new Error(st.error || "Erreur statut");
+        setVideoStatus(`Rendu : ${st.status}… (${attempts * 3}s)`);
+        if (st.status === "done" && st.url) {
+          setVideoUrl(st.url);
+          addToLog({
+            type: "VIDÉO",
+            decision: `Vidéo assemblée : "${pipelineScript.title}"`,
+            rationale: `Durée ~${data.total_duration}s · ${(visuals.clips || []).length} segments`,
+            kpi: "Phase 4 ✓",
+          });
+          break;
+        }
+        if (st.status === "failed") throw new Error("Le rendu Shotstack a échoué");
+      }
+      if (attempts >= maxAttempts && !videoUrl) {
+        throw new Error("Délai de rendu dépassé (3 min). Réessaie ou vérifie Shotstack.");
+      }
+    } catch (e) {
+      setVideoError(e.message);
+    }
+    setVideoLoading(false);
+    setVideoStatus(null);
+  };
 
   const handleFetchVisuals = async () => {
     if (!pipelineScript) return;
@@ -190,7 +255,9 @@ export default function JarvisApp() {
     setPipelineScript(null);
     setPipelineError(null);
     setAudioUrl(null);
+    setAudioUrlHosted(null);
     setVisuals(null);
+    setVideoUrl(null);
     try {
       const res = await fetch("/api/generate-script", {
         method: "POST",
@@ -223,6 +290,7 @@ export default function JarvisApp() {
     if (!pipelineScript) return;
     setAudioLoading(true);
     setAudioUrl(null);
+    setAudioUrlHosted(null);
     setAudioError(null);
     const fullText = (pipelineScript.narration_segments || []).map(s => s.text).join(" ");
     try {
@@ -235,6 +303,19 @@ export default function JarvisApp() {
       if (!res.ok) throw new Error(data.error || "Erreur inconnue");
       const url = `data:${data.mime};base64,${data.audio_base64}`;
       setAudioUrl(url);
+
+      // Héberge l'audio dans Netlify Blobs pour obtenir une URL publique
+      // (nécessaire pour l'assemblage Shotstack en Phase 4).
+      try {
+        const hostRes = await fetch("/api/store-audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audio_base64: data.audio_base64 }),
+        });
+        const hostData = await hostRes.json();
+        if (hostRes.ok && hostData.url) setAudioUrlHosted(hostData.url);
+      } catch { /* hébergement optionnel pour l'écoute, requis seulement pour Phase 4 */ }
+
       addToLog({
         type: "VOIX OFF",
         decision: `Audio généré pour "${pipelineScript.title}"`,
@@ -640,6 +721,51 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                         </div>
                         <div style={{ marginTop: 10, fontSize: 11, color: T.muted, fontFamily: T.mono, lineHeight: 1.6 }}>
                           Aperçus des clips qui seront assemblés en Phase 4. Clips fournis par Pexels.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PHASE 4 — ASSEMBLAGE VIDÉO */}
+                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      ◈ Phase 4 — Assemblage vidéo (Shotstack)
+                    </div>
+                    {(!audioUrlHosted || !visuals) && (
+                      <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.6 }}>
+                        Génère d'abord la voix off (Phase 2) ET les visuels (Phase 3) avant l'assemblage.
+                      </div>
+                    )}
+                    <button
+                      onClick={handleAssembleVideo}
+                      disabled={videoLoading || !audioUrlHosted || !visuals}
+                      style={{
+                        padding: "10px 22px",
+                        background: (videoLoading || !audioUrlHosted || !visuals) ? T.accentDim : T.accent,
+                        color: T.bg0, border: "none", borderRadius: 8,
+                        cursor: (videoLoading || !audioUrlHosted || !visuals) ? "not-allowed" : "pointer",
+                        fontWeight: 800, fontSize: 13, fontFamily: T.mono,
+                      }}
+                    >
+                      {videoLoading ? <>ASSEMBLAGE <Spinner /></> : "🎞 ASSEMBLER LA VIDÉO"}
+                    </button>
+                    {videoStatus && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: T.blue, fontFamily: T.mono }}>{videoStatus}</div>
+                    )}
+                    {videoError && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: T.red, lineHeight: 1.6 }}>{videoError}</div>
+                    )}
+                    {videoUrl && (
+                      <div style={{ marginTop: 12 }}>
+                        <video controls src={videoUrl} style={{ width: "100%", maxWidth: 280, borderRadius: 8, display: "block" }} />
+                        <a href={videoUrl} target="_blank" rel="noreferrer" style={{
+                          display: "inline-block", marginTop: 10, fontSize: 12, color: T.accent,
+                          fontFamily: T.mono, textDecoration: "none",
+                        }}>
+                          ↗ Ouvrir / télécharger le MP4
+                        </a>
+                        <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontFamily: T.mono, lineHeight: 1.6 }}>
+                          Vidéo prête. Phase 5 (à venir) : publication automatique sur YouTube.
                         </div>
                       </div>
                     )}
