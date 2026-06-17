@@ -146,6 +146,38 @@ export default function JarvisApp() {
   const [pipelineScript, setPipelineScript] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
   const [recentTopics, setRecentTopics] = useState([]); // anti-répétition
+
+  // Fiabilité pédagogique — vérification factuelle
+  const [factLoading, setFactLoading] = useState(false);
+  const [factReport, setFactReport] = useState(null);
+  const [factError, setFactError] = useState(null);
+
+  const handleFactCheck = async () => {
+    if (!pipelineScript) return;
+    setFactLoading(true);
+    setFactReport(null);
+    setFactError(null);
+    try {
+      const res = await fetch("/api/fact-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script: pipelineScript }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+      setFactReport(data.report);
+      const critiques = (data.report.issues || []).filter(x => x.severity === "critique").length;
+      addToLog({
+        type: "VÉRIF FACTUELLE",
+        decision: data.report.verdict === "ok" ? "Script validé factuellement" : `${(data.report.issues || []).length} problème(s) détecté(s)`,
+        rationale: data.report.summary || "",
+        kpi: critiques > 0 ? `⚠ ${critiques} critique(s)` : "Fiabilité ✓",
+      });
+    } catch (e) {
+      setFactError(e.message);
+    }
+    setFactLoading(false);
+  };
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioUrlHosted, setAudioUrlHosted] = useState(null); // URL publique pour Shotstack
@@ -254,6 +286,7 @@ export default function JarvisApp() {
     setPipelineLoading(true);
     setPipelineScript(null);
     setPipelineError(null);
+    setFactReport(null);
     setAudioUrl(null);
     setAudioUrlHosted(null);
     setVisuals(null);
@@ -313,8 +346,14 @@ export default function JarvisApp() {
           body: JSON.stringify({ audio_base64: data.audio_base64 }),
         });
         const hostData = await hostRes.json();
-        if (hostRes.ok && hostData.url) setAudioUrlHosted(hostData.url);
-      } catch { /* hébergement optionnel pour l'écoute, requis seulement pour Phase 4 */ }
+        if (hostRes.ok && hostData.url) {
+          setAudioUrlHosted(hostData.url);
+        } else {
+          setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + (hostData.error || "erreur inconnue") + " — la Phase 4 restera bloquée tant que ce n'est pas résolu.");
+        }
+      } catch (hostErr) {
+        setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + hostErr.message + " — la Phase 4 restera bloquée tant que ce n'est pas résolu.");
+      }
 
       addToLog({
         type: "VOIX OFF",
@@ -640,6 +679,71 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   <div style={{ marginTop: 12, background: `${T.accent}11`, borderRadius: 8, padding: 12 }}>
                     <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 4 }}>JUSTIFICATION ÉDITORIALE</div>
                     <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>{pipelineScript.rationale}</div>
+                  </div>
+
+                  {/* FIABILITÉ PÉDAGOGIQUE — VÉRIFICATION FACTUELLE */}
+                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      ◈ Fiabilité pédagogique — Vérification factuelle
+                    </div>
+                    <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.6 }}>
+                      Contrôle l'exactitude du script avant de produire la vidéo. Recommandé pour tout contenu éducatif.
+                    </div>
+                    <button
+                      onClick={handleFactCheck}
+                      disabled={factLoading}
+                      style={{
+                        padding: "10px 22px", background: factLoading ? T.accentDim : T.accent,
+                        color: T.bg0, border: "none", borderRadius: 8,
+                        cursor: factLoading ? "not-allowed" : "pointer",
+                        fontWeight: 800, fontSize: 13, fontFamily: T.mono,
+                      }}
+                    >
+                      {factLoading ? <>VÉRIFICATION <Spinner /></> : "✓ VÉRIFIER LES FAITS"}
+                    </button>
+                    {factError && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: T.red, lineHeight: 1.6 }}>{factError}</div>
+                    )}
+                    {factReport && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{
+                          display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px",
+                          borderRadius: 6, marginBottom: 10,
+                          background: factReport.verdict === "ok" ? `${T.green}22` : `${T.red}22`,
+                          border: `1px solid ${factReport.verdict === "ok" ? T.green : T.red}44`,
+                        }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: factReport.verdict === "ok" ? T.green : T.red }}>
+                            {factReport.verdict === "ok" ? "✓ Script validé" : "⚠ Corrections nécessaires"}
+                          </span>
+                          <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted }}>confiance: {factReport.confidence}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: T.text, marginBottom: 12, lineHeight: 1.6 }}>{factReport.summary}</div>
+
+                        {(factReport.issues || []).map((iss, i) => {
+                          const sevColor = iss.severity === "critique" ? T.red : iss.severity === "moyen" ? T.accent : T.muted;
+                          return (
+                            <div key={i} style={{
+                              background: T.bg2, borderRadius: 8, padding: 12, marginBottom: 8,
+                              borderLeft: `3px solid ${sevColor}`,
+                            }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                                <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted }}>SEGMENT {iss.segment_index}</span>
+                                <span style={{ fontSize: 10, fontFamily: T.mono, color: sevColor, fontWeight: 700, textTransform: "uppercase" }}>{iss.severity}</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic", marginBottom: 6 }}>« {iss.quote} »</div>
+                              <div style={{ fontSize: 12, color: T.text, marginBottom: 6, lineHeight: 1.5 }}><strong style={{ color: sevColor }}>Problème :</strong> {iss.problem}</div>
+                              <div style={{ fontSize: 12, color: T.green, lineHeight: 1.5 }}><strong>Correction :</strong> {iss.suggestion}</div>
+                            </div>
+                          );
+                        })}
+
+                        {factReport.verdict !== "ok" && (
+                          <div style={{ marginTop: 10, padding: 12, background: `${T.red}11`, borderRadius: 8, fontSize: 12, color: T.text, lineHeight: 1.6 }}>
+                            ⚠ Corrige le script avant de produire la vidéo : régénère avec un sujet ajusté, ou impose les corrections suggérées. Ne publie pas un contenu éducatif contenant une erreur factuelle.
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
