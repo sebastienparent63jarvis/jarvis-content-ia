@@ -73,18 +73,19 @@ export default async (req, context) => {
       });
     }
 
-    // Sous-titre : texte du segment, style lisible, bas de l'écran.
+    // Sous-titre : cartouche foncé semi-transparent + texte blanc pur,
+    // pour une lisibilité garantie quel que soit le visuel derrière.
     captionClips.push({
       asset: {
         type: "html",
-        html: `<p style="font-family:'Open Sans',sans-serif;color:#ffffff;font-size:54px;font-weight:700;text-align:center;line-height:1.3;text-shadow:0 2px 8px rgba(0,0,0,0.9);">${escapeHtml(seg.text)}</p>`,
-        width: 980,
-        height: 600,
+        html: `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><p style="font-family:'Open Sans',sans-serif;color:#ffffff;font-size:52px;font-weight:800;text-align:center;line-height:1.35;margin:0;padding:28px 36px;background:rgba(8,12,20,0.78);border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.5);">${escapeHtml(seg.text)}</p></div>`,
+        width: 1000,
+        height: 700,
       },
       start: cursor,
       length: dur,
       position: "bottom",
-      offset: { y: 0.12 },
+      offset: { y: 0.10 },
       transition: { in: "fade", out: "fade" },
     });
 
