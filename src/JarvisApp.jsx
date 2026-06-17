@@ -150,6 +150,8 @@ export default function JarvisApp() {
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioUrlHosted, setAudioUrlHosted] = useState(null); // URL publique pour Shotstack
+  const [copiedField, setCopiedField] = useState(null); // fiche de publication
+  const [markedPublished, setMarkedPublished] = useState(false);
   const [audioError, setAudioError] = useState(null);
   const [voiceId, setVoiceId] = useState("KGV4bLP8m7z8zXo2kC2X"); // voix FR choisie
   const [voiceIdInput, setVoiceIdInput] = useState("KGV4bLP8m7z8zXo2kC2X");
@@ -773,12 +775,77 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                         }}>
                           ↗ Ouvrir / télécharger le MP4
                         </a>
-                        <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontFamily: T.mono, lineHeight: 1.6 }}>
-                          Vidéo prête. Phase 5 (à venir) : publication automatique sur YouTube.
-                        </div>
                       </div>
                     )}
                   </div>
+
+                  {/* PHASE 5 — FICHE DE PUBLICATION */}
+                  {videoUrl && (
+                    <div style={{ marginTop: 16, padding: 16, background: T.bg0, borderRadius: 8, border: `1px solid ${T.accent}44` }}>
+                      <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        ◈ Phase 5 — Fiche de publication YouTube
+                      </div>
+                      <div style={{ fontSize: 11, color: T.muted, marginBottom: 14, lineHeight: 1.6 }}>
+                        Tout est prêt. Télécharge le MP4 ci-dessus, puis copie chaque élément dans YouTube Studio. Tu valides la vidéo avant qu'elle parte.
+                      </div>
+
+                      {[
+                        { label: "TITRE", value: pipelineScript.title },
+                        { label: "DESCRIPTION", value: pipelineScript.description },
+                        { label: "CRÉNEAU CONSEILLÉ", value: SLOTS.find(s => s.id === (pipelineScript.best_post_window || pipelineSlot))?.label + " — " + (SLOTS.find(s => s.id === (pipelineScript.best_post_window || pipelineSlot))?.time || "") },
+                      ].map((field, i) => (
+                        <div key={i} style={{ marginBottom: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted }}>{field.label}</span>
+                            <button
+                              onClick={() => { navigator.clipboard?.writeText(field.value || ""); setCopiedField(field.label); setTimeout(() => setCopiedField(null), 1500); }}
+                              style={{
+                                fontSize: 10, fontFamily: T.mono, fontWeight: 700,
+                                background: copiedField === field.label ? T.green : "transparent",
+                                color: copiedField === field.label ? T.bg0 : T.accent,
+                                border: `1px solid ${copiedField === field.label ? T.green : T.accent}`,
+                                borderRadius: 4, padding: "2px 10px", cursor: "pointer",
+                              }}
+                            >
+                              {copiedField === field.label ? "✓ COPIÉ" : "COPIER"}
+                            </button>
+                          </div>
+                          <div style={{ fontSize: 12, color: T.text, background: T.bg2, borderRadius: 6, padding: "8px 12px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                            {field.value}
+                          </div>
+                        </div>
+                      ))}
+
+                      <a
+                        href="https://studio.youtube.com/channel/UClW3vKJDea-ZZu861ly8rhQ/videos/upload"
+                        target="_blank" rel="noreferrer"
+                        style={{
+                          display: "block", textAlign: "center", marginTop: 8,
+                          padding: "12px", background: T.accent, color: T.bg0,
+                          borderRadius: 8, fontWeight: 800, fontSize: 13, fontFamily: T.mono,
+                          textDecoration: "none",
+                        }}
+                      >
+                        ↗ OUVRIR YOUTUBE STUDIO POUR PUBLIER
+                      </a>
+                      <button
+                        onClick={() => {
+                          addToLog({ type: "PUBLICATION", decision: `Marqué publié : "${pipelineScript.title}"`, rationale: "Validation manuelle confirmée", kpi: "Phase 5 ✓" });
+                          setMarkedPublished(true);
+                          setTimeout(() => setMarkedPublished(false), 2000);
+                        }}
+                        style={{
+                          width: "100%", marginTop: 8, padding: "8px",
+                          background: markedPublished ? T.green : "transparent",
+                          color: markedPublished ? T.bg0 : T.muted,
+                          border: `1px solid ${T.border}`, borderRadius: 8,
+                          cursor: "pointer", fontSize: 11, fontFamily: T.mono,
+                        }}
+                      >
+                        {markedPublished ? "✓ ENREGISTRÉ DANS LE JOURNAL" : "Marquer comme publié (pour le suivi)"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
