@@ -147,102 +147,9 @@ export default function JarvisApp() {
   const [pipelineError, setPipelineError] = useState(null);
   const [recentTopics, setRecentTopics] = useState([]); // anti-répétition
 
-  // Fiabilité pédagogique — vérification factuelle
-  const [factLoading, setFactLoading] = useState(false);
-  const [factReport, setFactReport] = useState(null);
-  const [factError, setFactError] = useState(null);
-  const [fixingIndex, setFixingIndex] = useState(null); // segment_index en cours de correction
-  const [fixedIndices, setFixedIndices] = useState([]); // segments déjà corrigés
-
-  const handleFixSegment = async (issue) => {
-    if (!pipelineScript) return;
-    const segs = pipelineScript.narration_segments || [];
-    const idx = issue.segment_index;
-    if (idx < 0 || idx >= segs.length) return;
-    setFixingIndex(idx);
-    try {
-      const res = await fetch("/api/fix-segment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: pipelineScript.title,
-          segmentText: segs[idx].text,
-          problem: issue.problem,
-          suggestion: issue.suggestion,
-          prevText: idx > 0 ? segs[idx - 1].text : "",
-          nextText: idx < segs.length - 1 ? segs[idx + 1].text : "",
-          keywords: segs[idx].visual_keywords || [],
-        }),
-      });
-      const raw = await res.text();
-      let data;
-      try { data = JSON.parse(raw); } catch { throw new Error("Réponse inattendue (délai dépassé ?)"); }
-      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
-
-      // Applique le segment corrigé au script, sans toucher au reste.
-      const newSegs = segs.map((s, i) => i === idx
-        ? { ...s, text: data.segment.text, visual_keywords: data.segment.visual_keywords || s.visual_keywords, duration_estimate_sec: data.segment.duration_estimate_sec || s.duration_estimate_sec }
-        : s
-      );
-      setPipelineScript({ ...pipelineScript, narration_segments: newSegs });
-      setFixedIndices(prev => [...new Set([...prev, idx])]);
-
-      // Le script a changé : les productions en aval sont obsolètes.
-      setAudioUrl(null);
-      setAudioUrlHosted(null);
-      setAudioSegments(null);
-      setVisuals(null);
-      setVideoUrl(null);
-
-      addToLog({
-        type: "CORRECTION",
-        decision: `Segment ${idx} corrigé`,
-        rationale: issue.problem,
-        kpi: "Fiabilité ✓",
-      });
-    } catch (e) {
-      setFactError("Correction du segment " + idx + " échouée : " + e.message);
-    }
-    setFixingIndex(null);
-  };
-
-  const handleFactCheck = async () => {
-    if (!pipelineScript) return;
-    setFactLoading(true);
-    setFactReport(null);
-    setFactError(null);
-    setFixedIndices([]);
-    try {
-      const res = await fetch("/api/fact-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script: pipelineScript }),
-      });
-      const raw = await res.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        throw new Error("La vérification a renvoyé une réponse inattendue (probable dépassement de délai). Réessaie ; si ça persiste, le script est peut-être trop long.");
-      }
-      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
-      setFactReport(data.report);
-      const critiques = (data.report.issues || []).filter(x => x.severity === "critique").length;
-      addToLog({
-        type: "VÉRIF FACTUELLE",
-        decision: data.report.verdict === "ok" ? "Script validé factuellement" : `${(data.report.issues || []).length} problème(s) détecté(s)`,
-        rationale: data.report.summary || "",
-        kpi: critiques > 0 ? `⚠ ${critiques} critique(s)` : "Fiabilité ✓",
-      });
-    } catch (e) {
-      setFactError(e.message);
-    }
-    setFactLoading(false);
-  };
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioUrlHosted, setAudioUrlHosted] = useState(null); // URL publique pour Shotstack
-  const [audioSegments, setAudioSegments] = useState(null); // segments + durées réelles
   const [audioError, setAudioError] = useState(null);
   const [voiceId, setVoiceId] = useState("KGV4bLP8m7z8zXo2kC2X"); // voix FR choisie
   const [voiceIdInput, setVoiceIdInput] = useState("KGV4bLP8m7z8zXo2kC2X");
@@ -273,7 +180,7 @@ export default function JarvisApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          audioSegments: audioSegments || undefined,
+          audioUrl: audioUrlHosted,
           segments: pipelineScript.narration_segments || [],
           clips: visuals.clips || [],
         }),
@@ -348,10 +255,8 @@ export default function JarvisApp() {
     setPipelineLoading(true);
     setPipelineScript(null);
     setPipelineError(null);
-    setFactReport(null);
     setAudioUrl(null);
     setAudioUrlHosted(null);
-    setAudioSegments(null);
     setVisuals(null);
     setVideoUrl(null);
     try {
@@ -387,32 +292,43 @@ export default function JarvisApp() {
     setAudioLoading(true);
     setAudioUrl(null);
     setAudioUrlHosted(null);
-    setAudioSegments(null);
     setAudioError(null);
+    const fullText = (pipelineScript.narration_segments || []).map(s => s.text).join(" ");
     try {
-      // Génère l'audio SEGMENT PAR SEGMENT avec durées réelles mesurées,
-      // pour un calage parfait des sous-titres sur la voix.
-      const res = await fetch("/api/generate-audio-segments", {
+      const res = await fetch("/api/generate-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          segments: pipelineScript.narration_segments || [],
-          voiceId,
-        }),
+        body: JSON.stringify({ text: fullText, voiceId }),
       });
       const raw = await res.text();
       let data;
       try { data = JSON.parse(raw); } catch { throw new Error("Réponse inattendue (délai dépassé ?)"); }
       if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+      const url = `data:${data.mime};base64,${data.audio_base64}`;
+      setAudioUrl(url);
 
-      setAudioSegments(data.segments);
-      setAudioUrlHosted(true); // marqueur : audio prêt pour la Phase 4
-      if (data.segments[0] && data.segments[0].url) setAudioUrl(data.segments[0].url);
+      // Héberge l'audio dans Netlify Blobs pour obtenir une URL publique
+      // (nécessaire pour l'assemblage Shotstack en Phase 4).
+      try {
+        const hostRes = await fetch("/api/store-audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audio_base64: data.audio_base64 }),
+        });
+        const hostData = await hostRes.json();
+        if (hostRes.ok && hostData.url) {
+          setAudioUrlHosted(hostData.url);
+        } else {
+          setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + (hostData.error || "erreur inconnue") + " — la Phase 4 restera bloquée tant que ce n'est pas résolu.");
+        }
+      } catch (hostErr) {
+        setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + hostErr.message);
+      }
 
       addToLog({
         type: "VOIX OFF",
-        decision: `Audio généré : ${data.segments.length} segments`,
-        rationale: `Durée réelle ~${data.totalDuration ? data.totalDuration.toFixed(1) : "?"}s · calage précis activé`,
+        decision: `Audio généré pour "${pipelineScript.title}"`,
+        rationale: `${data.chars_used} caractères ElevenLabs consommés`,
         kpi: "Phase 2 ✓",
       });
     } catch (e) {
@@ -733,93 +649,6 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   <div style={{ marginTop: 12, background: `${T.accent}11`, borderRadius: 8, padding: 12 }}>
                     <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 4 }}>JUSTIFICATION ÉDITORIALE</div>
                     <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>{pipelineScript.rationale}</div>
-                  </div>
-
-                  {/* FIABILITÉ PÉDAGOGIQUE — VÉRIFICATION FACTUELLE */}
-                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8, border: `1px solid ${T.border}` }}>
-                    <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      ◈ Fiabilité pédagogique — Vérification factuelle
-                    </div>
-                    <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.6 }}>
-                      Contrôle l'exactitude du script avant de produire la vidéo. Recommandé pour tout contenu éducatif.
-                    </div>
-                    <button
-                      onClick={handleFactCheck}
-                      disabled={factLoading}
-                      style={{
-                        padding: "10px 22px", background: factLoading ? T.accentDim : T.accent,
-                        color: T.bg0, border: "none", borderRadius: 8,
-                        cursor: factLoading ? "not-allowed" : "pointer",
-                        fontWeight: 800, fontSize: 13, fontFamily: T.mono,
-                      }}
-                    >
-                      {factLoading ? <>VÉRIFICATION <Spinner /></> : "✓ VÉRIFIER LES FAITS"}
-                    </button>
-                    {factError && (
-                      <div style={{ marginTop: 10, fontSize: 12, color: T.red, lineHeight: 1.6 }}>{factError}</div>
-                    )}
-                    {factReport && (
-                      <div style={{ marginTop: 12 }}>
-                        <div style={{
-                          display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px",
-                          borderRadius: 6, marginBottom: 10,
-                          background: factReport.verdict === "ok" ? `${T.green}22` : `${T.red}22`,
-                          border: `1px solid ${factReport.verdict === "ok" ? T.green : T.red}44`,
-                        }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: factReport.verdict === "ok" ? T.green : T.red }}>
-                            {factReport.verdict === "ok" ? "✓ Script validé" : "⚠ Corrections nécessaires"}
-                          </span>
-                          <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted }}>confiance: {factReport.confidence}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: T.text, marginBottom: 12, lineHeight: 1.6 }}>{factReport.summary}</div>
-
-                        {(factReport.issues || []).map((iss, i) => {
-                          const sevColor = iss.severity === "critique" ? T.red : iss.severity === "moyen" ? T.accent : T.muted;
-                          return (
-                            <div key={i} style={{
-                              background: T.bg2, borderRadius: 8, padding: 12, marginBottom: 8,
-                              borderLeft: `3px solid ${sevColor}`,
-                            }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                                <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted }}>SEGMENT {iss.segment_index}</span>
-                                <span style={{ fontSize: 10, fontFamily: T.mono, color: sevColor, fontWeight: 700, textTransform: "uppercase" }}>{iss.severity}</span>
-                              </div>
-                              <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic", marginBottom: 6 }}>« {iss.quote} »</div>
-                              <div style={{ fontSize: 12, color: T.text, marginBottom: 6, lineHeight: 1.5 }}><strong style={{ color: sevColor }}>Problème :</strong> {iss.problem}</div>
-                              <div style={{ fontSize: 12, color: T.green, lineHeight: 1.5, marginBottom: 10 }}><strong>Correction :</strong> {iss.suggestion}</div>
-                              {fixedIndices.includes(iss.segment_index) ? (
-                                <div style={{ fontSize: 11, fontFamily: T.mono, color: T.green }}>✓ Segment corrigé et appliqué au script</div>
-                              ) : (
-                                <button
-                                  onClick={() => handleFixSegment(iss)}
-                                  disabled={fixingIndex !== null}
-                                  style={{
-                                    padding: "6px 14px",
-                                    background: fixingIndex === iss.segment_index ? T.accentDim : "transparent",
-                                    color: T.accent, border: `1px solid ${T.accent}`,
-                                    borderRadius: 6, cursor: fixingIndex !== null ? "not-allowed" : "pointer",
-                                    fontSize: 11, fontFamily: T.mono, fontWeight: 700,
-                                  }}
-                                >
-                                  {fixingIndex === iss.segment_index ? <>CORRECTION <Spinner /></> : "✎ CORRIGER CE SEGMENT"}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {factReport.verdict !== "ok" && (
-                          <div style={{ marginTop: 10, padding: 12, background: `${T.red}11`, borderRadius: 8, fontSize: 12, color: T.text, lineHeight: 1.6 }}>
-                            ⚠ Corrige le script avant de produire la vidéo : régénère avec un sujet ajusté, ou impose les corrections suggérées. Ne publie pas un contenu éducatif contenant une erreur factuelle.
-                          </div>
-                        )}
-                        {fixedIndices.length > 0 && (
-                          <div style={{ marginTop: 10, padding: 12, background: `${T.green}11`, borderRadius: 8, fontSize: 12, color: T.text, lineHeight: 1.6 }}>
-                            {fixedIndices.length} segment(s) corrigé(s) et appliqué(s) au script. Relance « Vérifier les faits » pour confirmer que tout est bon avant de produire.
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
