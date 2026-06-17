@@ -151,12 +151,66 @@ export default function JarvisApp() {
   const [factLoading, setFactLoading] = useState(false);
   const [factReport, setFactReport] = useState(null);
   const [factError, setFactError] = useState(null);
+  const [fixingIndex, setFixingIndex] = useState(null); // segment_index en cours de correction
+  const [fixedIndices, setFixedIndices] = useState([]); // segments déjà corrigés
+
+  const handleFixSegment = async (issue) => {
+    if (!pipelineScript) return;
+    const segs = pipelineScript.narration_segments || [];
+    const idx = issue.segment_index;
+    if (idx < 0 || idx >= segs.length) return;
+    setFixingIndex(idx);
+    try {
+      const res = await fetch("/api/fix-segment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: pipelineScript.title,
+          segmentText: segs[idx].text,
+          problem: issue.problem,
+          suggestion: issue.suggestion,
+          prevText: idx > 0 ? segs[idx - 1].text : "",
+          nextText: idx < segs.length - 1 ? segs[idx + 1].text : "",
+          keywords: segs[idx].visual_keywords || [],
+        }),
+      });
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); } catch { throw new Error("Réponse inattendue (délai dépassé ?)"); }
+      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+
+      // Applique le segment corrigé au script, sans toucher au reste.
+      const newSegs = segs.map((s, i) => i === idx
+        ? { ...s, text: data.segment.text, visual_keywords: data.segment.visual_keywords || s.visual_keywords, duration_estimate_sec: data.segment.duration_estimate_sec || s.duration_estimate_sec }
+        : s
+      );
+      setPipelineScript({ ...pipelineScript, narration_segments: newSegs });
+      setFixedIndices(prev => [...new Set([...prev, idx])]);
+
+      // Le script a changé : les productions en aval sont obsolètes.
+      setAudioUrl(null);
+      setAudioUrlHosted(null);
+      setVisuals(null);
+      setVideoUrl(null);
+
+      addToLog({
+        type: "CORRECTION",
+        decision: `Segment ${idx} corrigé`,
+        rationale: issue.problem,
+        kpi: "Fiabilité ✓",
+      });
+    } catch (e) {
+      setFactError("Correction du segment " + idx + " échouée : " + e.message);
+    }
+    setFixingIndex(null);
+  };
 
   const handleFactCheck = async () => {
     if (!pipelineScript) return;
     setFactLoading(true);
     setFactReport(null);
     setFactError(null);
+    setFixedIndices([]);
     try {
       const res = await fetch("/api/fact-check", {
         method: "POST",
@@ -738,7 +792,24 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                               </div>
                               <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic", marginBottom: 6 }}>« {iss.quote} »</div>
                               <div style={{ fontSize: 12, color: T.text, marginBottom: 6, lineHeight: 1.5 }}><strong style={{ color: sevColor }}>Problème :</strong> {iss.problem}</div>
-                              <div style={{ fontSize: 12, color: T.green, lineHeight: 1.5 }}><strong>Correction :</strong> {iss.suggestion}</div>
+                              <div style={{ fontSize: 12, color: T.green, lineHeight: 1.5, marginBottom: 10 }}><strong>Correction :</strong> {iss.suggestion}</div>
+                              {fixedIndices.includes(iss.segment_index) ? (
+                                <div style={{ fontSize: 11, fontFamily: T.mono, color: T.green }}>✓ Segment corrigé et appliqué au script</div>
+                              ) : (
+                                <button
+                                  onClick={() => handleFixSegment(iss)}
+                                  disabled={fixingIndex !== null}
+                                  style={{
+                                    padding: "6px 14px",
+                                    background: fixingIndex === iss.segment_index ? T.accentDim : "transparent",
+                                    color: T.accent, border: `1px solid ${T.accent}`,
+                                    borderRadius: 6, cursor: fixingIndex !== null ? "not-allowed" : "pointer",
+                                    fontSize: 11, fontFamily: T.mono, fontWeight: 700,
+                                  }}
+                                >
+                                  {fixingIndex === iss.segment_index ? <>CORRECTION <Spinner /></> : "✎ CORRIGER CE SEGMENT"}
+                                </button>
+                              )}
                             </div>
                           );
                         })}
@@ -746,6 +817,11 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                         {factReport.verdict !== "ok" && (
                           <div style={{ marginTop: 10, padding: 12, background: `${T.red}11`, borderRadius: 8, fontSize: 12, color: T.text, lineHeight: 1.6 }}>
                             ⚠ Corrige le script avant de produire la vidéo : régénère avec un sujet ajusté, ou impose les corrections suggérées. Ne publie pas un contenu éducatif contenant une erreur factuelle.
+                          </div>
+                        )}
+                        {fixedIndices.length > 0 && (
+                          <div style={{ marginTop: 10, padding: 12, background: `${T.green}11`, borderRadius: 8, fontSize: 12, color: T.text, lineHeight: 1.6 }}>
+                            {fixedIndices.length} segment(s) corrigé(s) et appliqué(s) au script. Relance « Vérifier les faits » pour confirmer que tout est bon avant de produire.
                           </div>
                         )}
                       </div>
