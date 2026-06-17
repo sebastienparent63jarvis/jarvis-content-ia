@@ -31,15 +31,25 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { audioUrl, segments, clips } = body;
+  const { audioUrl, audioSegments, segments, clips } = body;
+  // audioSegments (préféré): [{ index, url, duration }, ...] — durées RÉELLES
+  // audioUrl (ancien mode): un seul fichier, timing estimé (fallback)
   // segments: [{ text, duration_estimate_sec }, ...]
   // clips: [{ segment_index, clip: { link } }, ...]
 
-  if (!audioUrl) {
-    return new Response(JSON.stringify({ error: "audioUrl manquant (héberge d'abord la voix off)" }), { status: 400 });
+  const hasRealAudio = Array.isArray(audioSegments) && audioSegments.length > 0;
+
+  if (!audioUrl && !hasRealAudio) {
+    return new Response(JSON.stringify({ error: "Audio manquant (génère d'abord la voix off)" }), { status: 400 });
   }
   if (!Array.isArray(segments) || segments.length === 0) {
     return new Response(JSON.stringify({ error: "segments manquants" }), { status: 400 });
+  }
+
+  // Map des durées réelles et URLs par index de segment (si dispo).
+  const realByIndex = {};
+  if (hasRealAudio) {
+    audioSegments.forEach((a) => { realByIndex[a.index] = a; });
   }
 
   // Construit la timeline : chaque segment occupe une tranche de temps,
@@ -50,10 +60,25 @@ export default async (req, context) => {
   let cursor = 0;
   const videoClips = [];
   const captionClips = [];
+  const audioClips = [];
 
   segments.forEach((seg, i) => {
-    const dur = Math.max(2, seg.duration_estimate_sec || 5);
+    // Durée RÉELLE si on l'a mesurée, sinon estimation (avec marge de 0.15s
+    // de respiration entre segments pour un rendu naturel).
+    const real = realByIndex[i];
+    const dur = real && real.duration
+      ? real.duration + 0.15
+      : Math.max(2, seg.duration_estimate_sec || 5);
     const videoLink = clipByIndex[i];
+
+    // Place l'audio du segment exactement sur sa tranche.
+    if (real && real.url) {
+      audioClips.push({
+        asset: { type: "audio", src: real.url },
+        start: cursor,
+        length: dur,
+      });
+    }
 
     if (videoLink) {
       videoClips.push({
@@ -74,7 +99,7 @@ export default async (req, context) => {
     }
 
     // Sous-titre : cartouche foncé semi-transparent + texte blanc pur,
-    // pour une lisibilité garantie quel que soit le visuel derrière.
+    // calé EXACTEMENT sur la durée réelle de la narration du segment.
     captionClips.push({
       asset: {
         type: "html",
@@ -94,12 +119,17 @@ export default async (req, context) => {
 
   const totalDuration = cursor;
 
+  // Piste audio : soit les segments calés (mode réel), soit l'audio global (fallback).
+  const audioTrack = hasRealAudio
+    ? { clips: audioClips }
+    : { clips: [{ asset: { type: "audio", src: audioUrl }, start: 0, length: totalDuration }] };
+
   const timeline = {
     background: "#000000",
     tracks: [
       { clips: captionClips }, // piste du dessus = sous-titres
-      { clips: videoClips },   // piste du dessous = vidéo de fond
-      { clips: [{ asset: { type: "audio", src: audioUrl }, start: 0, length: totalDuration }] },
+      { clips: videoClips },   // piste du milieu = vidéo de fond
+      audioTrack,              // piste du dessous = voix off
     ],
   };
 

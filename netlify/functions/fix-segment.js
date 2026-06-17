@@ -15,7 +15,7 @@ On te donne UN segment de narration qui contient une erreur factuelle, le probl�
 - Écrit pour la voix off : nombres et pourcentages EN TOUTES LETTRES, aucun symbole (€, %, $, k), pas d'homographe verbe/nom ambigu
 - Fluide avec les segments voisins (transition naturelle)
 
-Si l'erreur portait sur un chiffre incertain ou daté, préfère une formulation prudente et vraie ("aux alentours de", "en général", "renseigne-toi sur le plafond en vigueur") plutôt qu'un chiffre que tu ne peux pas garantir.
+Si l'erreur portait sur un chiffre incertain ou daté, NE l'enrobe PAS de précautions molles ("aux alentours de", "renseigne-toi", "en général") — ça tue l'impact. À la place, reformule de façon AFFIRMATIVE et percutante en t'appuyant sur le concept stable plutôt que sur le chiffre fragile. Exemple : au lieu de "le plafond est d'environ X euros, mais vérifie", écris "il existe un plafond, et le dépasser ne rapporte rien de plus". Le segment doit rester aussi punchy que le reste de la vidéo.
 
 Réponds UNIQUEMENT en JSON valide, structure exacte :
 {

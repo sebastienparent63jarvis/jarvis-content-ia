@@ -190,6 +190,7 @@ export default function JarvisApp() {
       // Le script a changé : les productions en aval sont obsolètes.
       setAudioUrl(null);
       setAudioUrlHosted(null);
+      setAudioSegments(null);
       setVisuals(null);
       setVideoUrl(null);
 
@@ -241,6 +242,7 @@ export default function JarvisApp() {
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioUrlHosted, setAudioUrlHosted] = useState(null); // URL publique pour Shotstack
+  const [audioSegments, setAudioSegments] = useState(null); // segments + durées réelles
   const [audioError, setAudioError] = useState(null);
   const [voiceId, setVoiceId] = useState("KGV4bLP8m7z8zXo2kC2X"); // voix FR choisie
   const [voiceIdInput, setVoiceIdInput] = useState("KGV4bLP8m7z8zXo2kC2X");
@@ -271,7 +273,7 @@ export default function JarvisApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          audioUrl: audioUrlHosted,
+          audioSegments: audioSegments || undefined,
           segments: pipelineScript.narration_segments || [],
           clips: visuals.clips || [],
         }),
@@ -349,6 +351,7 @@ export default function JarvisApp() {
     setFactReport(null);
     setAudioUrl(null);
     setAudioUrlHosted(null);
+    setAudioSegments(null);
     setVisuals(null);
     setVideoUrl(null);
     try {
@@ -384,41 +387,32 @@ export default function JarvisApp() {
     setAudioLoading(true);
     setAudioUrl(null);
     setAudioUrlHosted(null);
+    setAudioSegments(null);
     setAudioError(null);
-    const fullText = (pipelineScript.narration_segments || []).map(s => s.text).join(" ");
     try {
-      const res = await fetch("/api/generate-audio", {
+      // Génère l'audio SEGMENT PAR SEGMENT avec durées réelles mesurées,
+      // pour un calage parfait des sous-titres sur la voix.
+      const res = await fetch("/api/generate-audio-segments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: fullText, voiceId }),
+        body: JSON.stringify({
+          segments: pipelineScript.narration_segments || [],
+          voiceId,
+        }),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); } catch { throw new Error("Réponse inattendue (délai dépassé ?)"); }
       if (!res.ok) throw new Error(data.error || "Erreur inconnue");
-      const url = `data:${data.mime};base64,${data.audio_base64}`;
-      setAudioUrl(url);
 
-      // Héberge l'audio dans Netlify Blobs pour obtenir une URL publique
-      // (nécessaire pour l'assemblage Shotstack en Phase 4).
-      try {
-        const hostRes = await fetch("/api/store-audio", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audio_base64: data.audio_base64 }),
-        });
-        const hostData = await hostRes.json();
-        if (hostRes.ok && hostData.url) {
-          setAudioUrlHosted(hostData.url);
-        } else {
-          setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + (hostData.error || "erreur inconnue") + " — la Phase 4 restera bloquée tant que ce n'est pas résolu.");
-        }
-      } catch (hostErr) {
-        setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + hostErr.message + " — la Phase 4 restera bloquée tant que ce n'est pas résolu.");
-      }
+      setAudioSegments(data.segments);
+      setAudioUrlHosted(true); // marqueur : audio prêt pour la Phase 4
+      if (data.segments[0] && data.segments[0].url) setAudioUrl(data.segments[0].url);
 
       addToLog({
         type: "VOIX OFF",
-        decision: `Audio généré pour "${pipelineScript.title}"`,
-        rationale: `${data.chars_used} caractères ElevenLabs consommés`,
+        decision: `Audio généré : ${data.segments.length} segments`,
+        rationale: `Durée réelle ~${data.totalDuration ? data.totalDuration.toFixed(1) : "?"}s · calage précis activé`,
         kpi: "Phase 2 ✓",
       });
     } catch (e) {

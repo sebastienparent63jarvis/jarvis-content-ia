@@ -4,6 +4,19 @@
 
 import { getStore } from "@netlify/blobs";
 
+function openStore() {
+  try {
+    return getStore({ name: "jarvis-audio", consistency: "strong" });
+  } catch (e) {
+    const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
+    const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_API_TOKEN;
+    if (siteID && token) {
+      return getStore({ name: "jarvis-audio", siteID, token, consistency: "strong" });
+    }
+    throw e;
+  }
+}
+
 export default async (req, context) => {
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
@@ -16,7 +29,7 @@ export default async (req, context) => {
   }
 
   try {
-    const store = getStore({ name: "jarvis-audio", consistency: "strong" });
+    const store = openStore();
     const data = await store.get(key, { type: "arrayBuffer" });
 
     if (!data) {
