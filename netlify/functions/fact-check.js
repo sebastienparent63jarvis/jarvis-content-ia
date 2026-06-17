@@ -19,6 +19,8 @@ Sois particulièrement vigilant sur :
 
 Tu n'es pas là pour réécrire le style ou juger l'angle éditorial — UNIQUEMENT l'exactitude factuelle.
 
+Tu travailles SANS accès à internet : tu te bases sur tes connaissances. Pour les chiffres susceptibles d'avoir changé récemment (taux de livrets, plafonds fiscaux, seuils annuels), ne prétends pas les avoir vérifiés en temps réel : signale-les en sévérité "moyen" avec la mention qu'ils sont à confirmer auprès d'une source officielle à jour, plutôt que de les déclarer faux ou vrais avec certitude.
+
 Réponds UNIQUEMENT en JSON valide, structure exacte :
 {
   "verdict": "ok" | "corrections_needed",
@@ -82,7 +84,6 @@ export default async (req, context) => {
         max_tokens: 1500,
         system: FACTCHECK_SYSTEM_PROMPT,
         messages: [{ role: "user", content: userPrompt }],
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
       }),
     });
 

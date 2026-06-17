@@ -163,7 +163,13 @@ export default function JarvisApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script: pipelineScript }),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error("La vérification a renvoyé une réponse inattendue (probable dépassement de délai). Réessaie ; si ça persiste, le script est peut-être trop long.");
+      }
       if (!res.ok) throw new Error(data.error || "Erreur inconnue");
       setFactReport(data.report);
       const critiques = (data.report.issues || []).filter(x => x.severity === "critique").length;
