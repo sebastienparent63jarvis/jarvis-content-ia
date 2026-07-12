@@ -94,6 +94,10 @@ export default async (req, context) => {
 
   const { topic, slot, recentTopics, style } = body; // style: "profond" | "actionnable" | "actualite"
 
+  const avoidBlock = (Array.isArray(recentTopics) && recentTopics.length > 0)
+    ? `\n\nSUJETS DÉJÀ TRAITÉS RÉCEMMENT (à NE PAS répéter, ni en sujet ni en angle) :\n${recentTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nChoisis impérativement une catégorie ET un angle différents de tout ce qui précède.`
+    : "";
+
   const STYLE_BLOCKS = {
     profond: `\n\nSTYLE IMPOSÉ POUR CE SCRIPT — "PROFONDEUR ANCRÉE" :
 Explique un mécanisme ou un biais (psychologique, économique, comportemental) MAIS toujours à travers le vécu du spectateur : son cerveau, son comportement, son argent. Jamais le concept pour le concept.

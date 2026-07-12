@@ -305,8 +305,14 @@ export default function JarvisApp() {
           recentTopics: recentTopics.slice(0, 15),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+      const rawResp = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawResp);
+      } catch {
+        throw new Error(`Réponse inattendue (HTTP ${res.status}) : ${rawResp.slice(0, 200)}`);
+      }
+      if (!res.ok) throw new Error(data.error || `Erreur HTTP ${res.status}` + (data.raw ? " — " + JSON.stringify(data.raw).slice(0, 200) : ""));
       setPipelineScript(data.script);
       setRecentTopics(prev => [data.script.title, ...prev].slice(0, 30));
 
