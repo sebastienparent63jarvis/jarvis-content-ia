@@ -91,6 +91,7 @@ export default async (req, context) => {
         createdAt: Date.now(),
         title: script.title,
         category: script.category || "",
+        style: script.style || "",
         description: script.description || "",
         segments: script.narration_segments || [],
         rationale: script.rationale || "",

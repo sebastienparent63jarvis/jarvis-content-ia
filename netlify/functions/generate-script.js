@@ -92,15 +92,34 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { topic, slot, recentTopics } = body; // slot: créneau ; recentTopics: titres déjà produits
+  const { topic, slot, recentTopics, style } = body; // style: "profond" | "actionnable" | "actualite"
 
-  const avoidBlock = (Array.isArray(recentTopics) && recentTopics.length > 0)
-    ? `\n\nSUJETS DÉJÀ TRAITÉS RÉCEMMENT (à NE PAS répéter, ni en sujet ni en angle) :\n${recentTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nChoisis impérativement une catégorie ET un angle différents de tout ce qui précède.`
-    : "";
+  const STYLE_BLOCKS = {
+    profond: `\n\nSTYLE IMPOSÉ POUR CE SCRIPT — "PROFONDEUR ANCRÉE" :
+Explique un mécanisme ou un biais (psychologique, économique, comportemental) MAIS toujours à travers le vécu du spectateur : son cerveau, son comportement, son argent. Jamais le concept pour le concept.
+- Hook : une situation vécue où le spectateur se reconnaît ("quand tu vois -50%, ton cerveau...").
+- Développe le POURQUOI, mais chaque phrase doit parler de LUI, pas d'une théorie abstraite.
+- Maintiens la tension : chaque segment relance une micro-curiosité, jamais de temps mort scolaire.
+Objectif : rétention longue par la valeur, ancrée dans le concret.`,
+    actionnable: `\n\nSTYLE IMPOSÉ POUR CE SCRIPT — "SOLUTION RAPIDE ACTIONNABLE" :
+Donne une méthode ou une astuce directement applicable, sans longue théorie.
+- Hook : un problème concret et frustrant du quotidien ("fin de mois, compte vide, tu sais pas pourquoi").
+- Payoff rapide : la solution/méthode claire, nommée, mémorable.
+- Puis 2-3 étapes concrètes pour l'appliquer. Pas de digression théorique.
+Objectif : valeur immédiate et actionnable.`,
+    actualite: `\n\nSTYLE IMPOSÉ POUR CE SCRIPT — "ANCRAGE TEMPOREL / ACTUALITÉ" :
+Rattache le sujet à un événement ou une période que le spectateur VIT en ce moment (soldes, rentrée, impôts, fêtes, Black Friday, hausse des prix, actualité économique récente).
+- Hook : relie explicitement au moment présent ("en pleine période de soldes...", "à l'approche des impôts...").
+- Le sujet doit sembler URGENT et pertinent MAINTENANT.
+- Garde une vraie valeur (pas juste "c'est d'actualité"), mais l'accroche est la résonance temporelle.
+Objectif : tester si la pertinence temporelle porte la rétention.`,
+  };
+
+  const styleBlock = STYLE_BLOCKS[style] || "";
 
   const userPrompt = topic
-    ? `Sujet imposé : ${topic}${slot ? `\nCréneau de publication visé : ${slot}` : ""}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`
-    : `Aucun sujet imposé. Choisis toi-même un angle pertinent pour aujourd'hui dans la niche Finance Personnelle x IA, en t'appuyant sur les tendances actuelles.${slot ? `\nCréneau de publication visé : ${slot}` : ""}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`;
+    ? `Sujet imposé : ${topic}${slot ? `\nCréneau de publication visé : ${slot}` : ""}${styleBlock}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`
+    : `Aucun sujet imposé. Choisis toi-même un angle pertinent pour aujourd'hui dans l'éducation financière accessible.${slot ? `\nCréneau de publication visé : ${slot}` : ""}${styleBlock}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`;
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -149,6 +168,9 @@ export default async (req, context) => {
         { status: 502, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    // Étiquette le script avec son style pour l'analyse comparative future.
+    if (style) script.style = style;
 
     return new Response(JSON.stringify({ script }), {
       status: 200,

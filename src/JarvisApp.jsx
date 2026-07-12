@@ -141,11 +141,44 @@ export default function JarvisApp() {
 
   // Pipeline Shorts (Phase 1)
   const [pipelineSlot, setPipelineSlot] = useState("matin");
+  const [pipelineStyle, setPipelineStyle] = useState("profond"); // style de test A/B/C
   const [pipelineTopic, setPipelineTopic] = useState("");
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [pipelineScript, setPipelineScript] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
   const [recentTopics, setRecentTopics] = useState([]); // anti-répétition
+  const [currentScriptId, setCurrentScriptId] = useState(null); // id archive du script courant
+  const [history, setHistory] = useState(null); // scripts archivés
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+  const [openScriptId, setOpenScriptId] = useState(null); // script déplié dans l'historique
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await fetch("/api/scripts-history");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+      setHistory(data.scripts || []);
+    } catch (e) {
+      setHistoryError(e.message);
+    }
+    setHistoryLoading(false);
+  };
+
+  const saveRetention = async (id, retention, views) => {
+    try {
+      const res = await fetch("/api/scripts-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, retention: retention === "" ? null : Number(retention), views: views === "" ? null : Number(views) }),
+      });
+      if (res.ok) {
+        setHistory(prev => (prev || []).map(s => s.id === id ? { ...s, retention: retention === "" ? null : Number(retention), views: views === "" ? null : Number(views) } : s));
+      }
+    } catch { /* silencieux */ }
+  };
 
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
@@ -268,6 +301,7 @@ export default function JarvisApp() {
         body: JSON.stringify({
           topic: pipelineTopic.trim() || undefined,
           slot: pipelineSlot,
+          style: pipelineStyle,
           recentTopics: recentTopics.slice(0, 15),
         }),
       });
@@ -275,6 +309,18 @@ export default function JarvisApp() {
       if (!res.ok) throw new Error(data.error || "Erreur inconnue");
       setPipelineScript(data.script);
       setRecentTopics(prev => [data.script.title, ...prev].slice(0, 30));
+
+      // Archive le script dans l'historique persistant (pour comparaison future).
+      try {
+        const arch = await fetch("/api/scripts-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ script: data.script }),
+        });
+        const archData = await arch.json();
+        if (arch.ok && archData.id) setCurrentScriptId(archData.id);
+      } catch { /* archivage best-effort, ne bloque pas la génération */ }
+
       addToLog({
         type: "SCRIPT SHORTS",
         decision: data.script.title,
@@ -458,10 +504,11 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
             { id: "dashboard", icon: "⬡", label: "Dashboard" },
             { id: "pipeline", icon: "▶", label: "Pipeline Shorts" },
             { id: "generate", icon: "✦", label: "Générer" },
+            { id: "history", icon: "◪", label: "Historique" },
             { id: "report", icon: "◈", label: `Journal (${log.length})` },
             { id: "settings", icon: "◎", label: "Paramètres" },
           ].map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} style={{
+            <button key={item.id} onClick={() => { setView(item.id); if (item.id === "history") loadHistory(); }} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 20px",
               background: view === item.id ? T.bg2 : "transparent",
               color: view === item.id ? T.accent : T.muted,
@@ -571,6 +618,29 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                         <span style={{ fontSize: 11, fontFamily: T.mono, color: T.muted }}>{s.time}</span>
                       </div>
                       <div style={{ fontSize: 11, color: T.muted }}>{s.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* STYLE SELECTOR (test A/B/C) */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, display: "block", marginBottom: 8 }}>
+                  STYLE DE TEST — pour comparer la rétention par approche
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                  {[
+                    { id: "profond", label: "Profondeur ancrée", desc: "Explique un mécanisme via le vécu du spectateur" },
+                    { id: "actionnable", label: "Solution rapide", desc: "Méthode directe et actionnable" },
+                    { id: "actualite", label: "Ancrage actualité", desc: "Rattaché à un moment que le spectateur vit" },
+                  ].map(st => (
+                    <button key={st.id} onClick={() => setPipelineStyle(st.id)} style={{
+                      padding: "10px 12px", background: pipelineStyle === st.id ? `${T.accent}22` : T.bg2,
+                      border: `1px solid ${pipelineStyle === st.id ? T.accent : T.border}`,
+                      borderRadius: 8, cursor: "pointer", textAlign: "left",
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: pipelineStyle === st.id ? T.accent : T.text, marginBottom: 3 }}>{st.label}</div>
+                      <div style={{ fontSize: 10, color: T.muted, lineHeight: 1.4 }}>{st.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -977,6 +1047,99 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               ) : (
                 log.map(entry => <DecisionCard key={entry.id} entry={entry} />)
               )}
+            </div>
+          )}
+
+          {/* ── HISTORIQUE DES SCRIPTS ── */}
+          {view === "history" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Historique des scripts</h2>
+                <button onClick={loadHistory} style={{
+                  padding: "8px 16px", background: "transparent", color: T.accent,
+                  border: `1px solid ${T.accent}`, borderRadius: 6, cursor: "pointer",
+                  fontSize: 12, fontFamily: T.mono, fontWeight: 700,
+                }}>↻ ACTUALISER</button>
+              </div>
+              <p style={{ color: T.muted, fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
+                Relis n'importe quel script passé et note sa rétention. Compare ce qui marche (rétention haute) à ce qui échoue — c'est comme ça qu'on trouve ce qui fonctionne chez toi.
+              </p>
+
+              {historyLoading && <div style={{ color: T.accent, fontFamily: T.mono, fontSize: 13 }}>Chargement <Spinner /></div>}
+              {historyError && <div style={{ color: T.red, fontSize: 13 }}>{historyError}</div>}
+
+              {history && history.length === 0 && !historyLoading && (
+                <div style={{ textAlign: "center", padding: "50px 0", color: T.muted, border: `1px dashed ${T.border}`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 28, marginBottom: 10 }}>◪</div>
+                  <div style={{ fontSize: 14, fontFamily: T.mono }}>Aucun script archivé</div>
+                  <div style={{ fontSize: 12, marginTop: 6 }}>Génère un script dans Pipeline Shorts, il sera archivé ici</div>
+                </div>
+              )}
+
+              {history && history.map(s => {
+                const retColor = s.retention == null ? T.muted : s.retention >= 60 ? T.green : s.retention >= 45 ? T.accent : T.red;
+                const isOpen = openScriptId === s.id;
+                return (
+                  <div key={s.id} style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>{s.title}</div>
+                        <div style={{ fontSize: 11, fontFamily: T.mono, color: T.muted }}>
+                          {new Date(s.createdAt).toLocaleDateString("fr-FR")} {s.category ? `· ${s.category}` : ""}
+                        </div>
+                        {s.style && (
+                          <span style={{
+                            display: "inline-block", marginTop: 6, fontSize: 10, fontFamily: T.mono, fontWeight: 700,
+                            background: `${T.blue}22`, color: T.blue, border: `1px solid ${T.blue}44`,
+                            borderRadius: 4, padding: "2px 8px",
+                          }}>
+                            {s.style === "profond" ? "Profondeur ancrée" : s.style === "actionnable" ? "Solution rapide" : s.style === "actualite" ? "Ancrage actualité" : s.style}
+                          </span>
+                        )}
+                      </div>
+                      {s.retention != null && (
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: retColor, fontFamily: T.mono }}>{s.retention}%</div>
+                          <div style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>rétention 10s</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+                      <button onClick={() => setOpenScriptId(isOpen ? null : s.id)} style={{
+                        padding: "5px 12px", background: "transparent", color: T.accent,
+                        border: `1px solid ${T.accent}`, borderRadius: 6, cursor: "pointer",
+                        fontSize: 11, fontFamily: T.mono, fontWeight: 700,
+                      }}>{isOpen ? "▲ MASQUER LE SCRIPT" : "▼ LIRE LE SCRIPT"}</button>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+                        <span style={{ fontSize: 10, color: T.muted, fontFamily: T.mono }}>RÉTENTION 10s :</span>
+                        <input
+                          type="number"
+                          defaultValue={s.retention ?? ""}
+                          onBlur={(e) => saveRetention(s.id, e.target.value, s.views ?? "")}
+                          placeholder="%"
+                          style={{
+                            width: 60, background: T.bg0, border: `1px solid ${T.border}`,
+                            borderRadius: 4, padding: "4px 8px", color: T.text, fontSize: 12, fontFamily: T.mono,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {isOpen && (
+                      <div style={{ marginTop: 12, background: T.bg0, borderRadius: 8, padding: 14 }}>
+                        {(s.segments || []).map((seg, i) => (
+                          <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < s.segments.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                            <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted, marginRight: 8 }}>#{i + 1}</span>
+                            <span style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{seg.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
