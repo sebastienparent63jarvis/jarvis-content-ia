@@ -151,25 +151,38 @@ export default function JarvisApp() {
     setNewsLoading(true);
     setNewsError(null);
     setNewsTopics(null);
+    const jobId = `news-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
-      const res = await fetch("/api/fetch-news", {
+      // 1. Déclenche la recherche en background (répond 202 immédiatement).
+      await fetch("/.netlify/functions/fetch-news-background", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hint: pipelineNews.trim() || undefined }),
+        body: JSON.stringify({ jobId, hint: pipelineNews.trim() || undefined }),
       });
-      const raw = await res.text();
-      let data;
-      try { data = JSON.parse(raw); } catch { throw new Error(`Réponse inattendue (HTTP ${res.status})`); }
-      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
-      const topics = data.topics || [];
+
+      // 2. Poll le résultat jusqu'à done/error (max ~60s).
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      let topics = null;
+      for (let i = 0; i < 30; i++) {
+        await sleep(2500);
+        const r = await fetch(`/api/news-result?jobId=${encodeURIComponent(jobId)}`);
+        const raw = await r.text();
+        let d;
+        try { d = JSON.parse(raw); } catch { continue; }
+        if (d.status === "done") { topics = d.topics || []; break; }
+        if (d.status === "error") throw new Error(d.error || "Erreur recherche actu");
+        // sinon status pending/en cours → on continue à attendre
+      }
+      if (topics === null) throw new Error("La recherche d'actualité a dépassé le délai. Réessaie.");
+
       if (autoGenerate && topics.length > 0) {
-        // Mode auto : JARVIS prend le sujet le plus percutant et génère direct.
         const best = topics[0];
         setPipelineNews(best.actu);
+        setNewsLoading(false);
         await handleGenerateScript(best.actu);
-      } else {
-        setNewsTopics(topics);
+        return;
       }
+      setNewsTopics(topics);
     } catch (e) {
       setNewsError(e.message);
     }
