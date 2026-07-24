@@ -170,7 +170,7 @@ export default function JarvisApp() {
         let d;
         try { d = JSON.parse(raw); } catch { continue; }
         if (d.status === "done") { topics = d.topics || []; break; }
-        if (d.status === "error") throw new Error(d.error || "Erreur recherche actu");
+        if (d.status === "error") throw new Error((d.error || "Erreur recherche actu") + (d.raw ? " — réponse: " + d.raw.slice(0, 150) : ""));
         // sinon status pending/en cours → on continue à attendre
       }
       if (topics === null) throw new Error("La recherche d'actualité a dépassé le délai. Réessaie.");

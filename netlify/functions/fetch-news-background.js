@@ -33,7 +33,9 @@ Réponds UNIQUEMENT en JSON valide :
     { "actu": "l'événement en une phrase", "angle_finance": "l'angle finance perso concret", "titre_propose": "titre YouTube percutant à vocabulaire fort" }
   ]
 }
-5 sujets, du plus percutant au moins percutant.`;
+5 sujets, du plus percutant au moins percutant.
+
+CRITIQUE : ta réponse finale doit être UNIQUEMENT l'objet JSON, sans aucun texte avant ni après, sans phrase d'introduction, sans commentaire. Commence directement par { et termine par }. Fais tes recherches web d'abord, puis ne réponds que le JSON.`;
 
 export default async (req, context) => {
   // Une background function reçoit le body, répond 202, et continue.
@@ -88,9 +90,17 @@ export default async (req, context) => {
       const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
       let parsed;
       try {
-        parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+        // La recherche web fait souvent précéder/suivre le JSON de texte.
+        // On extrait le premier objet JSON complet du texte.
+        let clean = text.replace(/```json|```/g, "").trim();
+        const start = clean.indexOf("{");
+        const end = clean.lastIndexOf("}");
+        if (start !== -1 && end !== -1 && end > start) {
+          clean = clean.slice(start, end + 1);
+        }
+        parsed = JSON.parse(clean);
       } catch {
-        await store.set(jobId, JSON.stringify({ status: "error", error: "Réponse non conforme au JSON" }));
+        await store.set(jobId, JSON.stringify({ status: "error", error: "Réponse non conforme au JSON", raw: text.slice(0, 400) }));
         return;
       }
 
