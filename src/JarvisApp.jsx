@@ -141,7 +141,40 @@ export default function JarvisApp() {
 
   // Pipeline Shorts (Phase 1)
   const [pipelineSlot, setPipelineSlot] = useState("matin");
-  const [pipelineStyle, setPipelineStyle] = useState("profond"); // style de test A/B/C
+  const [pipelineNews, setPipelineNews] = useState(""); // thème d'actualité optionnel
+  const [pipelineStyle, setPipelineStyle] = useState("actualite_punchy"); // 2 styles
+  const [newsTopics, setNewsTopics] = useState(null); // sujets d'actu proposés
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState(null);
+
+  const fetchNews = async (autoGenerate) => {
+    setNewsLoading(true);
+    setNewsError(null);
+    setNewsTopics(null);
+    try {
+      const res = await fetch("/api/fetch-news", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hint: pipelineNews.trim() || undefined }),
+      });
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); } catch { throw new Error(`Réponse inattendue (HTTP ${res.status})`); }
+      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
+      const topics = data.topics || [];
+      if (autoGenerate && topics.length > 0) {
+        // Mode auto : JARVIS prend le sujet le plus percutant et génère direct.
+        const best = topics[0];
+        setPipelineNews(best.actu);
+        await handleGenerateScript(best.actu);
+      } else {
+        setNewsTopics(topics);
+      }
+    } catch (e) {
+      setNewsError(e.message);
+    }
+    setNewsLoading(false);
+  };
   const [pipelineTopic, setPipelineTopic] = useState("");
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [pipelineScript, setPipelineScript] = useState(null);
@@ -286,7 +319,7 @@ export default function JarvisApp() {
   };
 
 
-  const handleGenerateScript = async () => {
+  const handleGenerateScript = async (newsOverride) => {
     setPipelineLoading(true);
     setPipelineScript(null);
     setPipelineError(null);
@@ -302,6 +335,7 @@ export default function JarvisApp() {
           topic: pipelineTopic.trim() || undefined,
           slot: pipelineSlot,
           style: pipelineStyle,
+          newsTheme: (typeof newsOverride === "string" && newsOverride) ? newsOverride : (pipelineNews.trim() || undefined),
           recentTopics: recentTopics.slice(0, 15),
         }),
       });
@@ -629,16 +663,15 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 </div>
               </div>
 
-              {/* STYLE SELECTOR (test A/B/C) */}
+              {/* STYLE SELECTOR (2 styles) */}
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, display: "block", marginBottom: 8 }}>
-                  STYLE DE TEST — pour comparer la rétention par approche
+                  STYLE DE CONTENU
                 </label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
                   {[
-                    { id: "profond", label: "Profondeur ancrée", desc: "Explique un mécanisme via le vécu du spectateur" },
-                    { id: "actionnable", label: "Solution rapide", desc: "Méthode directe et actionnable" },
-                    { id: "actualite", label: "Ancrage actualité", desc: "Rattaché à un moment que le spectateur vit" },
+                    { id: "actualite_punchy", label: "Actualité punchy", desc: "Accroche à chaud sur un fait d'actu, angle finance vif" },
+                    { id: "solution_rapide", label: "Solution rapide financière", desc: "Problème d'argent concret → méthode actionnable" },
                   ].map(st => (
                     <button key={st.id} onClick={() => setPipelineStyle(st.id)} style={{
                       padding: "10px 12px", background: pipelineStyle === st.id ? `${T.accent}22` : T.bg2,
@@ -650,6 +683,75 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* NEWS SEARCH — background web search, two modes */}
+              <div style={{ marginBottom: 16, padding: 14, background: T.bg0, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <label style={{ fontSize: 12, color: T.accent, fontFamily: T.mono, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  ◈ Recherche d'actualité (web)
+                </label>
+                <input
+                  value={pipelineNews}
+                  onChange={e => setPipelineNews(e.target.value)}
+                  placeholder="Optionnel : oriente la recherche (ex: énergie, immobilier, Iran…)"
+                  style={{
+                    width: "100%", background: T.bg2, border: `1px solid ${T.border}`,
+                    borderRadius: 8, padding: "10px 14px", color: T.text, fontSize: 13,
+                    fontFamily: T.sans, boxSizing: "border-box", outline: "none", marginBottom: 10,
+                  }}
+                />
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => fetchNews(false)}
+                    disabled={newsLoading || pipelineLoading}
+                    style={{
+                      flex: 1, minWidth: 160, padding: "10px", background: T.bg2, color: T.accent,
+                      border: `1px solid ${T.accent}`, borderRadius: 8,
+                      cursor: (newsLoading || pipelineLoading) ? "not-allowed" : "pointer",
+                      fontSize: 12, fontFamily: T.mono, fontWeight: 700,
+                    }}
+                  >
+                    {newsLoading ? <>RECHERCHE <Spinner /></> : "🔍 PROPOSE-MOI DES SUJETS"}
+                  </button>
+                  <button
+                    onClick={() => fetchNews(true)}
+                    disabled={newsLoading || pipelineLoading}
+                    style={{
+                      flex: 1, minWidth: 160, padding: "10px", background: (newsLoading || pipelineLoading) ? T.accentDim : T.accent, color: T.bg0,
+                      border: "none", borderRadius: 8,
+                      cursor: (newsLoading || pipelineLoading) ? "not-allowed" : "pointer",
+                      fontSize: 12, fontFamily: T.mono, fontWeight: 700,
+                    }}
+                  >
+                    {newsLoading ? <>… <Spinner /></> : "⚡ CHOISIS ET GÉNÈRE"}
+                  </button>
+                </div>
+                <div style={{ fontSize: 10, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
+                  La recherche web prend quelques secondes de plus — c'est normal. "Propose" te laisse choisir ; "Choisis et génère" prend le sujet le plus percutant et lance tout.
+                </div>
+                {newsError && <div style={{ marginTop: 8, fontSize: 11, color: T.red }}>{newsError}</div>}
+
+                {newsTopics && newsTopics.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 8 }}>SUJETS PROPOSÉS — clique pour générer :</div>
+                    {newsTopics.map((t, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { setPipelineNews(t.actu); handleGenerateScript(t.actu); }}
+                        disabled={pipelineLoading}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left", marginBottom: 8,
+                          background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8,
+                          padding: "10px 12px", cursor: pipelineLoading ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 3 }}>{t.titre_propose}</div>
+                        <div style={{ fontSize: 10, color: T.muted, lineHeight: 1.4 }}>📰 {t.actu}</div>
+                        <div style={{ fontSize: 10, color: T.accent, lineHeight: 1.4, marginTop: 2 }}>💰 {t.angle_finance}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* TOPIC INPUT */}
@@ -1099,7 +1201,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                             background: `${T.blue}22`, color: T.blue, border: `1px solid ${T.blue}44`,
                             borderRadius: 4, padding: "2px 8px",
                           }}>
-                            {s.style === "profond" ? "Profondeur ancrée" : s.style === "actionnable" ? "Solution rapide" : s.style === "actualite" ? "Ancrage actualité" : s.style}
+                            {s.style === "actualite_punchy" ? "Actualité punchy" : s.style === "solution_rapide" ? "Solution rapide" : s.style === "profond" ? "Profondeur ancrée" : s.style === "actionnable" ? "Solution rapide" : s.style === "actualite" ? "Ancrage actualité" : s.style}
                           </span>
                         )}
                       </div>

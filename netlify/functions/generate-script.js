@@ -27,7 +27,9 @@ Si une liste de sujets déjà traités t'est fournie, tu dois ABSOLUMENT choisir
 
 Ton : chaleureux et accessible sur le FOND (on démocratise, on explique à un ami), mais l'EMBALLAGE doit être natif Shorts — tension, curiosité, révélation. Le public des Shorts ne veut pas un cours : il veut un choc ou une promesse forte, PUIS il apprend en douce. L'esprit "grande émission éducative" vit dans la clarté de l'explication, pas dans un ton scolaire ou un titre descriptif.
 
-TITRE ET ANGLE — leçon tirée des données réelles de la chaîne : les formulations descriptives/scolaires ("C'est quoi un ETF", "expliqué simplement", "comprendre X") FONT FUIR. Les formulations à tension FONCTIONNENT : "l'arnaque qu'on te cache", "le vrai coût de X", "l'erreur que tout le monde fait avec X", "ce que ton banquier ne te dira jamais". Emballe TOUJOURS le sujet éducatif dans un angle de curiosité ou de révélation. Le fond reste pédagogique et fiable ; la porte d'entrée est émotionnelle.
+TITRE ET ANGLE — leçon tirée des données réelles de la chaîne : les formulations descriptives/scolaires ("C'est quoi un ETF", "expliqué simplement", "comprendre X") FONT FUIR. Les titres qui génèrent le plus de vues utilisent un VOCABULAIRE FORT et émotionnel. Analyse des meilleurs titres réels de la chaîne : les mots déclencheurs qui marchent sont du type "saigne", "arnaque", "le vrai coût que personne ne calcule", "tu vas flipper", "vide ton compte", "le piège". Utilise SYSTÉMATIQUEMENT ce registre percutant dans le titre.
+
+RÈGLE D'OR DU TITRE FORT — la promesse doit être TENUE : pousse le vocabulaire du titre au maximum de ce que le contenu peut réellement livrer. Un titre qui promet un choc que la vidéo ne tient pas fait fuir les spectateurs (rétention finale qui s'effondre) et YouTube pénalise. Donc : titre aussi percutant que possible, MAIS le corps de la vidéo doit réellement délivrer ce que le titre promet. Avant de finaliser un titre, vérifie mentalement : "le contenu tient-il cette promesse ?". Si oui, vas-y fort. Si non, trouve un angle choc que le contenu PEUT tenir. Jamais de choc gratuit non tenu — c'est contre-productif.
 
 RIGUEUR FACTUELLE — non négociable (c'est une chaîne éducative, une erreur détruit la crédibilité) :
 - N'affirme QUE ce qui est vrai et stable. Les concepts et mécanismes financiers (intérêts composés, diversification, inflation, effet de levier...) sont sûrs : explique-les avec assurance.
@@ -92,38 +94,31 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { topic, slot, recentTopics, style } = body; // style: "profond" | "actionnable" | "actualite"
+  const { topic, slot, recentTopics, style, newsTheme } = body; // newsTheme: thème d'actualité saisi
 
   const avoidBlock = (Array.isArray(recentTopics) && recentTopics.length > 0)
     ? `\n\nSUJETS DÉJÀ TRAITÉS RÉCEMMENT (à NE PAS répéter, ni en sujet ni en angle) :\n${recentTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nChoisis impérativement une catégorie ET un angle différents de tout ce qui précède.`
     : "";
 
-  const STYLE_BLOCKS = {
-    profond: `\n\nSTYLE IMPOSÉ POUR CE SCRIPT — "PROFONDEUR ANCRÉE" :
-Explique un mécanisme ou un biais (psychologique, économique, comportemental) MAIS toujours à travers le vécu du spectateur : son cerveau, son comportement, son argent. Jamais le concept pour le concept.
-- Hook : une situation vécue où le spectateur se reconnaît ("quand tu vois -50%, ton cerveau...").
-- Développe le POURQUOI, mais chaque phrase doit parler de LUI, pas d'une théorie abstraite.
-- Maintiens la tension : chaque segment relance une micro-curiosité, jamais de temps mort scolaire.
-Objectif : rétention longue par la valeur, ancrée dans le concret.`,
-    actionnable: `\n\nSTYLE IMPOSÉ POUR CE SCRIPT — "SOLUTION RAPIDE ACTIONNABLE" :
-Donne une méthode ou une astuce directement applicable, sans longue théorie.
-- Hook : un problème concret et frustrant du quotidien ("fin de mois, compte vide, tu sais pas pourquoi").
-- Payoff rapide : la solution/méthode claire, nommée, mémorable.
-- Puis 2-3 étapes concrètes pour l'appliquer. Pas de digression théorique.
-Objectif : valeur immédiate et actionnable.`,
-    actualite: `\n\nSTYLE IMPOSÉ POUR CE SCRIPT — "ANCRAGE TEMPOREL / ACTUALITÉ" :
-Rattache le sujet à un événement ou une période que le spectateur VIT en ce moment (soldes, rentrée, impôts, fêtes, Black Friday, hausse des prix, actualité économique récente).
-- Hook : relie explicitement au moment présent ("en pleine période de soldes...", "à l'approche des impôts...").
-- Le sujet doit sembler URGENT et pertinent MAINTENANT.
-- Garde une vraie valeur (pas juste "c'est d'actualité"), mais l'accroche est la résonance temporelle.
-Objectif : tester si la pertinence temporelle porte la rétention.`,
-  };
+  // Bloc actualité : si un thème d'actu est fourni, on ancre le sujet dessus.
+  const newsBlock = (newsTheme && newsTheme.trim())
+    ? `\n\nANCRAGE ACTUALITÉ — obligatoire : relie le sujet à cette actualité du moment : "${newsTheme.trim()}". Le hook doit explicitement rattacher le sujet à ce contexte présent, pour que la vidéo semble urgente et pertinente MAINTENANT. Trouve l'angle finance personnelle / économie concrète qui découle de cette actualité.`
+    : "";
 
-  const styleBlock = STYLE_BLOCKS[style] || "";
+  // Deux styles retenus (les plus performants en vues sur les données réelles).
+  const STYLE_BLOCKS = {
+    actualite_punchy: `\n\nSTYLE — "ACTUALITÉ PUNCHY" :
+Accroche à chaud sur un fait d'actualité ou une réalité du moment, avec un angle finance percutant. Ton vif, rythme rapide, titre à vocabulaire fort. Le spectateur doit sentir que ça le concerne LÀ, MAINTENANT. Chaque segment relance la tension.`,
+    solution_rapide: `\n\nSTYLE — "SOLUTION RAPIDE FINANCIÈRE" :
+Pars d'un problème d'argent concret et frustrant du quotidien, puis livre une méthode ou astuce claire, nommée, mémorable, directement applicable. Payoff rapide, puis 2-3 étapes concrètes. Titre à vocabulaire fort qui promet un gain ou évite une perte.`,
+  };
+  const chosenStyle = STYLE_BLOCKS[style] || STYLE_BLOCKS.actualite_punchy;
+
+  const styleBlock = chosenStyle + newsBlock;
 
   const userPrompt = topic
     ? `Sujet imposé : ${topic}${slot ? `\nCréneau de publication visé : ${slot}` : ""}${styleBlock}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`
-    : `Aucun sujet imposé. Choisis toi-même un angle pertinent pour aujourd'hui dans l'éducation financière accessible.${slot ? `\nCréneau de publication visé : ${slot}` : ""}${styleBlock}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`;
+    : `Aucun sujet imposé. Choisis toi-même un angle percutant pour aujourd'hui.${slot ? `\nCréneau de publication visé : ${slot}` : ""}${styleBlock}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`;
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -175,7 +170,6 @@ Objectif : tester si la pertinence temporelle porte la rétention.`,
 
     // Étiquette le script avec son style pour l'analyse comparative future.
     if (style) script.style = style;
-
     return new Response(JSON.stringify({ script }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
