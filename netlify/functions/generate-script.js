@@ -39,16 +39,21 @@ RIGUEUR FACTUELLE — non négociable (c'est une chaîne éducative, une erreur 
 - Quand une règle dépend d'un pays, précise qu'il s'agit du contexte français (l'audience est francophone) plutôt que de la présenter comme universelle.
 - En cas de doute sur un fait, ne l'inclus pas : choisis un autre angle sûr. Mieux vaut une vidéo simple et exacte qu'une vidéo riche et fausse.
 
-Pour CHAQUE script, applique cette STRUCTURE NARRATIVE (elle est la clé de la rétention — la respecter est vital) :
+Pour CHAQUE script, applique cette STRUCTURE NARRATIVE (c'est la clé de la rétention jusqu'au bout — la respecter est vital) :
 
-RÈGLE ABSOLUE DE LA SECONDE 5 : le point de décrochage mortel d'un Short est la seconde 4-5. Le hook attire (secondes 0-3), mais si la PROMESSE n'est pas TENUE immédiatement après, le spectateur scrolle. Tu dois donc livrer la révélation ou l'information principale AVANT la seconde 5 — pas la mise en contexte, pas "pour comprendre il faut d'abord...", pas de préambule. La réponse d'abord, les détails ensuite.
+1. Hook (segments 0-3s) : une accroche à forte tension — révélation, chiffre choc, erreur commune, "ce qu'on te cache". Ouvre une BOUCLE de curiosité. Tes hooks fonctionnent déjà très bien, garde ce niveau.
 
-1. Hook (segments 0-3s) : une accroche à forte tension — révélation, chiffre choc, erreur commune, "ce qu'on te cache". Ouvre une BOUCLE de curiosité (le spectateur DOIT savoir la suite).
-2. PAYOFF IMMÉDIAT (segments ~3-8s) : referme la boucle tout de suite. Donne la réponse, la révélation, le cœur de l'info SANS attendre. C'est ici que la plupart des chaînes échouent : elles font traîner. Toi, tu paies la promesse immédiatement, puis tu ROUVRES une nouvelle boucle ("mais ce n'est pas tout...", "et voici pourquoi c'est pire que tu crois...").
-3. Déroulé (segments ~8-45s) : MAINTENANT tu peux expliquer, contextualiser, donner l'exemple concret. L'attention est verrouillée. Enchaîne les micro-boucles : chaque segment doit donner envie de regarder le suivant (tension continue, jamais de temps mort).
-4. CTA final (45-55s) : incitation à s'abonner, naturelle, liée à la valeur ("chaque jour un truc que ton banquier t'explique jamais").
+2. Développement à tension continue (segments ~3-30s) : livre la valeur, mais chaque segment doit donner envie de voir le suivant. Le contenu doit parler du spectateur (son argent, son comportement), jamais de théorie abstraite.
 
-Principe directeur : TENSION NARRATIVE CONTINUE. Ouvre une boucle, referme-la vite, rouvre-en une autre. Jamais de segment "plat" qui explique sans créer d'attente pour la suite. Si un segment ne donne pas envie de voir le suivant, réécris-le.
+3. DEUXIÈME PROMESSE EN MILIEU DE VIDÉO (levier rétention finale, OBLIGATOIRE) — vers le milieu (~segment central), rouvre une NOUVELLE boucle qui ne se refermera qu'à la toute fin : "mais le pire, c'est ce qui arrive à la fin", "et il y a un dernier piège que personne ne voit venir", "attends, parce que le plus important arrive maintenant". Cette promesse relance la tension pile au moment où les gens décrochent d'habitude. Elle DOIT être tenue à la fin.
+
+4. FIN QUI RÉCOMPENSE (levier rétention finale, OBLIGATOIRE) — la dernière ligne de contenu doit être le MEILLEUR moment de la vidéo : la révélation la plus forte, le conseil le plus actionnable, ou la punchline la plus marquante. JAMAIS une fin plate ou une simple redite. C'est ce qui referme la deuxième promesse et récompense ceux qui sont restés. Le spectateur doit se dire "j'ai bien fait de regarder jusqu'au bout".
+
+5. CTA final à VALEUR FUTURE (levier attachement/abonnés) — après la récompense, une phrase courte qui promet un RENDEZ-VOUS récurrent et une valeur à venir, pas un simple "abonne-toi". Formule le bénéfice futur : "chaque jour je décrypte une actu qui touche ton portefeuille — abonne-toi pour ne pas la rater", "demain, un autre piège que ta banque adore". Donne une raison concrète de revenir.
+
+VOIX ÉDITORIALE INCARNÉE (levier attachement, sur TOUT le script) : écris à la PREMIÈRE PERSONNE, comme un narrateur récurrent avec une personnalité identifiable — quelqu'un qui a un point de vue, qui s'adresse directement au spectateur ("je", "toi"), qui assume ses opinions ("moi ce qui me révolte, c'est..."). Pas une voix neutre et anonyme d'encyclopédie. Le spectateur doit avoir l'impression de retrouver LA MÊME personne à chaque vidéo — c'est ce qui crée l'attachement et donne envie de s'abonner à quelqu'un, pas à des vidéos.
+
+Principe directeur : TENSION NARRATIVE CONTINUE, du hook jusqu'à la dernière seconde. Deux boucles (une au début, une au milieu), la seconde ne se refermant qu'à la fin. Jamais de segment "plat". Si un segment ne donne pas envie de voir le suivant, réécris-le.
 
 Règles de forme :
 5. Le texte de narration doit être écrit pour être lu à voix haute (phrases courtes, rythme oral). Chaque segment COURT — une à deux phrases brèves (12 à 20 mots). Vise 8 à 12 segments pour un Short de 50 secondes.
