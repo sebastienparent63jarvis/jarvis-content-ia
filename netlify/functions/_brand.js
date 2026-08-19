@@ -28,19 +28,29 @@ export function brandMaskHtml({ title, category, hookWord }) {
     const re = new RegExp("(" + hw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "i");
     headHtml = headHtml.replace(re, `<b style="color:${B.purpleLight}">$1</b>`);
   }
-  const catHtml = category
-    ? `<span style="display:inline-block;color:${B.white};background:${B.purple};font-size:27px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;padding:10px 22px;border-radius:9px;margin-bottom:28px;font-family:'Inter','Open Sans',sans-serif;">${esc(category)}</span>`
+  // Sécurité : si la catégorie est trop longue (le modèle a parfois mis une
+  // phrase), on la tronque pour la pastille (max ~28 caractères).
+  let catLabel = (category || "").toString().trim();
+  if (catLabel.length > 28) catLabel = catLabel.slice(0, 28).replace(/[\s,(]+\S*$/, "") + "…";
+
+  const catHtml = catLabel
+    ? `<span style="display:inline-block;color:${B.white};background:${B.purple};font-size:30px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;padding:10px 22px;border-radius:9px;margin-bottom:28px;font-family:'Inter','Open Sans',sans-serif;">${esc(catLabel)}</span>`
     : "";
+
+  // Taille du titre adaptative : plus le titre est long, plus on réduit, pour
+  // qu'il reste dans le bandeau bas et ne remonte pas au centre.
+  const tlen = (title || "").length;
+  const titleSize = tlen > 60 ? 66 : tlen > 45 ? 76 : 88;
 
   return `<div style="position:relative;width:1080px;height:1920px;font-family:'Inter','Open Sans',sans-serif;">
     <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,14,22,0.42) 0%,rgba(10,14,22,0) 26%,rgba(10,14,22,0) 40%,rgba(10,14,22,0.96) 100%);"></div>
-    <div style="position:absolute;top:54px;left:54px;display:flex;align-items:center;gap:20px;">
-      <span style="background:${B.purple};color:${B.white};font-family:'Space Grotesk','Open Sans',sans-serif;font-weight:700;font-size:40px;letter-spacing:-1px;padding:6px 18px;border-radius:10px;">AC</span>
-      <span style="color:${B.white};font-weight:800;font-size:34px;letter-spacing:0.14em;">ACTU CRUE</span>
+    <div style="position:absolute;top:54px;left:54px;">
+      <span style="display:inline-block;vertical-align:middle;background:${B.purple};color:${B.white};font-family:'Space Grotesk','Open Sans',sans-serif;font-weight:700;font-size:40px;letter-spacing:-1px;padding:6px 18px;border-radius:10px;">AC</span>
+      <span style="display:inline-block;vertical-align:middle;margin-left:22px;color:${B.white};font-weight:800;font-size:34px;letter-spacing:0.14em;">ACTU CRUE</span>
     </div>
     <div style="position:absolute;left:0;right:0;bottom:0;padding:0 58px 66px;">
       ${catHtml}
-      <div style="color:${B.white};font-weight:900;font-size:88px;line-height:1.03;letter-spacing:-0.02em;">${headHtml}</div>
+      <div style="color:${B.white};font-weight:900;font-size:${titleSize}px;line-height:1.03;letter-spacing:-0.02em;">${headHtml}</div>
     </div>
   </div>`;
 }

@@ -69,7 +69,7 @@ Règles de forme :
 Réponds UNIQUEMENT en JSON valide, structure exacte :
 {
   "title": "Titre YouTube optimisé CTR (max 60 caractères)",
-  "category": "La catégorie choisie parmi la liste ci-dessus",
+  "category": "Une étiquette COURTE de 1 à 3 mots pour la pastille de miniature (ex: ÉNERGIE, IMMOBILIER, IMPÔTS, ÉPARGNE, INFLATION, ARNAQUES, BOURSE). PAS de phrase, PAS de description longue — juste le thème en quelques mots.",
   "description": "Description YouTube avec 3-5 hashtags pertinents",
   "narration_segments": [
     { "text": "texte à lire pour ce segment", "duration_estimate_sec": 5, "visual_keywords": ["keyword1", "keyword2"] }
