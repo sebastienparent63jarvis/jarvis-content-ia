@@ -9,6 +9,8 @@
 //   SHOTSTACK_API_KEY : ta clé API Shotstack
 //   SHOTSTACK_ENV : "stage" (gratuit, avec watermark) ou "v1" (production payante)
 
+import { brandMaskHtml, brandOutroHtml, BRAND } from "./_brand.js";
+
 export default async (req, context) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
@@ -31,11 +33,12 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { audioUrl, audioSegments, segments, clips } = body;
+  const { audioUrl, audioSegments, segments, clips, title, category, word } = body;
   // audioSegments (préféré): [{ index, url, duration }, ...] — durées RÉELLES
   // audioUrl (ancien mode): un seul fichier, timing estimé (fallback)
   // segments: [{ text, duration_estimate_sec }, ...]
   // clips: [{ segment_index, clip: { link } }, ...]
+  // title/category/word: pour l'intro de marque (masque 3s) et l'outro logo
 
   const hasRealAudio = Array.isArray(audioSegments) && audioSegments.length > 0;
 
@@ -119,17 +122,71 @@ export default async (req, context) => {
 
   const totalDuration = cursor;
 
+  // ---- INTRO : masque de marque sur les 3 premières secondes ----
+  // Superposé au tout début de la vidéo (par-dessus le 1er clip + 1er sous-titre),
+  // il disparaît par un balayage vers la droite ("slideRight") après 3 s.
+  const INTRO_DUR = 3;
+  const introClips = [];
+  if (title) {
+    introClips.push({
+      asset: {
+        type: "html",
+        html: brandMaskHtml({ title, category, hookWord: word }),
+        width: 1080,
+        height: 1920,
+      },
+      start: 0,
+      length: INTRO_DUR,
+      // Entrée en fondu, SORTIE en balayage vers la droite.
+      transition: { in: "fade", out: "slideRight" },
+    });
+  }
+
+  // ---- OUTRO : écran de fin de marque (logo) ajouté après le contenu ----
+  const OUTRO_DUR = 2.5;
+  const outroClips = [{
+    asset: {
+      type: "html",
+      html: brandOutroHtml(),
+      width: 1080,
+      height: 1920,
+    },
+    start: totalDuration,
+    length: OUTRO_DUR,
+    transition: { in: "fade", out: "fade" },
+  }];
+  // Fond violet plein pendant l'outro (sous le logo, pour couvrir la vidéo).
+  const outroBg = [{
+    asset: { type: "html", html: `<div style="width:100%;height:100%;background:${BRAND.purple};"></div>`, width: 1080, height: 1920 },
+    start: totalDuration,
+    length: OUTRO_DUR,
+  }];
+
+  const grandTotal = totalDuration + OUTRO_DUR;
+
   // Piste audio : soit les segments calés (mode réel), soit l'audio global (fallback).
+  // (L'audio couvre le contenu ; l'intro se superpose dessus sans décaler le son,
+  // et l'outro reste muet.)
   const audioTrack = hasRealAudio
     ? { clips: audioClips }
     : { clips: [{ asset: { type: "audio", src: audioUrl }, start: 0, length: totalDuration }] };
 
   const timeline = {
     background: "#000000",
+    // Polices de marque déclarées pour que l'intro/outro s'affichent correctement
+    // (Shotstack ne connaît Anton / Space Grotesk / Inter que si on les fournit).
+    fonts: [
+      { src: "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf" },
+      { src: "https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf" },
+      { src: "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf" },
+    ],
     tracks: [
-      { clips: captionClips }, // piste du dessus = sous-titres
-      { clips: videoClips },   // piste du milieu = vidéo de fond
-      audioTrack,              // piste du dessous = voix off
+      { clips: introClips },   // tout en haut : masque d'intro (3s, balayage sortie)
+      { clips: outroClips },   // logo de fin
+      { clips: captionClips }, // sous-titres
+      { clips: videoClips },   // vidéo de fond
+      { clips: outroBg },      // fond violet de l'outro
+      audioTrack,              // voix off
     ],
   };
 
@@ -162,7 +219,7 @@ export default async (req, context) => {
     }
 
     return new Response(
-      JSON.stringify({ render_id: data.response?.id, env, total_duration: totalDuration }),
+      JSON.stringify({ render_id: data.response?.id, env, total_duration: grandTotal }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {

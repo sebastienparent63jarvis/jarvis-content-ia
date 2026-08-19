@@ -1,16 +1,11 @@
-// Génère une MINIATURE (couverture) pour le Short : une image fixe 1080x1920,
-// fond = une frame d'un clip Pexels de la vidéo, avec le MOT-CHOC du titre
-// affiché en très gros. PAS de sous-titres. Sert la grille de chaîne, le
-// partage et la conversion en abonnés (peu la découverte, qui vient du flux).
+// Génère la MINIATURE (couverture) du Short au format de marque Actu Crue :
+// fond = frame d'un clip Pexels de la vidéo, masque violet Tor par-dessus
+// (badge AC + rubrique + titre), SANS sous-titres. Cohérent avec l'intro vidéo.
 //
 // Utilise Shotstack en mode image (output.format = "jpg").
 // Variables : SHOTSTACK_API_KEY, SHOTSTACK_ENV ("stage" ou "v1").
 
-function escapeHtml(s) {
-  return String(s || "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
+import { brandMaskHtml } from "./_brand.js";
 
 export default async (req, context) => {
   if (req.method !== "POST") {
@@ -30,45 +25,43 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps invalide" }), { status: 400 });
   }
 
-  const { bgImage, bgVideo, word } = body;
-  const hookWord = (word || "").toString().toUpperCase().slice(0, 24);
-  if (!hookWord) {
-    return new Response(JSON.stringify({ error: "Mot-choc (word) manquant" }), { status: 400 });
+  // On accepte le titre, la catégorie et le mot-choc (fournis par le script).
+  const { bgImage, bgVideo, title, category, word } = body;
+  const hookWord = (word || "").toString();
+  const titleText = (title || hookWord || "").toString();
+  if (!titleText) {
+    return new Response(JSON.stringify({ error: "Titre manquant pour la miniature" }), { status: 400 });
   }
 
-  // Fond : image de préférence, sinon on prend une frame d'un clip vidéo
-  // (Shotstack sait extraire une frame d'une vidéo en asset image via trim).
+  // Fond : image, sinon frame d'un clip vidéo, sinon violet uni.
   let bgAsset;
   if (bgImage) {
     bgAsset = { type: "image", src: bgImage };
   } else if (bgVideo) {
-    // Une vidéo comme fond d'image : Shotstack prend la frame au temps 0.
     bgAsset = { type: "video", src: bgVideo, trim: 0 };
   } else {
-    bgAsset = { type: "html", html: "<div></div>", background: "#0D1321", width: 1080, height: 1920 };
+    bgAsset = { type: "html", html: `<div style="width:100%;height:100%;background:#7D4698;"></div>`, width: 1080, height: 1920 };
   }
 
-  // Cartouche du mot-choc : très gros, centré, fort contraste, ombre marquée.
-  const wordHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;padding:0 40px;box-sizing:border-box;"><p style="font-family:'Open Sans',sans-serif;color:#ffffff;font-size:190px;font-weight:800;text-align:center;line-height:1.05;margin:0;text-shadow:0 6px 30px rgba(0,0,0,0.95),0 2px 8px rgba(0,0,0,1);letter-spacing:-2px;">${escapeHtml(hookWord)}</p></div>`;
-
-  // Léger voile sombre pour que le texte blanc ressorte sur n'importe quel fond.
-  const overlayHtml = `<div style="width:100%;height:100%;background:linear-gradient(180deg,rgba(0,0,0,0.15) 0%,rgba(0,0,0,0.45) 60%,rgba(0,0,0,0.65) 100%);"></div>`;
+  // Masque de marque (identique à l'intro vidéo).
+  const maskHtml = brandMaskHtml({ title: titleText, category, hookWord });
 
   const timeline = {
     background: "#000000",
+    fonts: [
+      { src: "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf" },
+      { src: "https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf" },
+      { src: "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf" },
+    ],
     tracks: [
-      { clips: [{ asset: { type: "html", html: wordHtml, width: 1080, height: 1920 }, start: 0, length: 1 }] },
-      { clips: [{ asset: { type: "html", html: overlayHtml, width: 1080, height: 1920 }, start: 0, length: 1 }] },
+      { clips: [{ asset: { type: "html", html: maskHtml, width: 1080, height: 1920 }, start: 0, length: 1 }] },
       { clips: [{ asset: bgAsset, start: 0, length: 1, fit: "cover" }] },
     ],
   };
 
   const payload = {
     timeline,
-    output: {
-      format: "jpg",
-      size: { width: 1080, height: 1920 },
-    },
+    output: { format: "jpg", size: { width: 1080, height: 1920 } },
   };
 
   try {
@@ -83,7 +76,6 @@ export default async (req, context) => {
         status: res.status, headers: { "Content-Type": "application/json" },
       });
     }
-    // Renvoie l'id de rendu : l'interface poll render-status comme pour la vidéo.
     return new Response(JSON.stringify({ id: data.response?.id }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
@@ -94,6 +86,4 @@ export default async (req, context) => {
   }
 };
 
-export const config = {
-  path: "/api/generate-thumbnail",
-};
+export const config = { path: "/api/generate-thumbnail" };

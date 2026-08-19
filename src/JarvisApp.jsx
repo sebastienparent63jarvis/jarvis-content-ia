@@ -267,6 +267,9 @@ export default function JarvisApp() {
           audioUrl: audioUrlHosted,
           segments: pipelineScript.narration_segments || [],
           clips: visuals.clips || [],
+          title: pipelineScript.title,
+          category: pipelineScript.category,
+          word: pipelineScript.thumbnail_word,
         }),
       });
       const data = await res.json();
@@ -322,6 +325,8 @@ export default function JarvisApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bgVideo: firstClip ? firstClip.clip.link : undefined,
+          title: pipelineScript.title,
+          category: pipelineScript.category,
           word,
         }),
       });
