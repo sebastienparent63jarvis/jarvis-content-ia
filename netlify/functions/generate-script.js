@@ -76,7 +76,8 @@ Réponds UNIQUEMENT en JSON valide, structure exacte :
   ],
   "total_duration_estimate_sec": 50,
   "rationale": "Pourquoi ce sujet/angle a été choisi, et ce que le spectateur va apprendre",
-  "best_post_window": "matin | midi | soir"
+  "best_post_window": "matin | midi | soir",
+  "thumbnail_word": "LE mot ou groupe de 1-3 mots le plus accrocheur du titre, en MAJUSCULES, à afficher en gros sur la miniature (ex: PIÈGE, 488€, ARNAQUE, +22%). Choisis le terme qui porte le plus de tension/curiosité."
 }`;
 
 export default async (req, context) => {

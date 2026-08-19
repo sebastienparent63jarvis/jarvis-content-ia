@@ -245,6 +245,9 @@ export default function JarvisApp() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoStatus, setVideoStatus] = useState(null); // texte d'étape en cours
   const [videoUrl, setVideoUrl] = useState(null);
+  const [thumbLoading, setThumbLoading] = useState(false);
+  const [thumbUrl, setThumbUrl] = useState(null);
+  const [thumbError, setThumbError] = useState(null);
   const [videoError, setVideoError] = useState(null);
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -303,6 +306,47 @@ export default function JarvisApp() {
     }
     setVideoLoading(false);
     setVideoStatus(null);
+  };
+
+  const handleGenerateThumbnail = async () => {
+    if (!pipelineScript) return;
+    setThumbLoading(true);
+    setThumbUrl(null);
+    setThumbError(null);
+    try {
+      // Fond : premier clip Pexels de la vidéo (cohérent visuellement).
+      const firstClip = (visuals && visuals.clips || []).find(c => c.clip && c.clip.link);
+      const word = pipelineScript.thumbnail_word || (pipelineScript.title || "").split(" ").slice(0, 2).join(" ");
+      const res = await fetch("/api/generate-thumbnail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bgVideo: firstClip ? firstClip.clip.link : undefined,
+          word,
+        }),
+      });
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); } catch { throw new Error(`Réponse inattendue (HTTP ${res.status})`); }
+      if (!res.ok) throw new Error(data.error || "Erreur miniature");
+      const renderId = data.id;
+      if (!renderId) throw new Error("Pas d'ID de rendu retourné");
+
+      // Poll le rendu (image, plus rapide qu'une vidéo).
+      let attempts = 0;
+      while (attempts < 40) {
+        await sleep(3000);
+        attempts++;
+        const stRes = await fetch(`/api/render-status?id=${encodeURIComponent(renderId)}`);
+        const st = await stRes.json();
+        if (st.status === "done" && st.url) { setThumbUrl(st.url); break; }
+        if (st.status === "failed") throw new Error("Le rendu de la miniature a échoué");
+      }
+      if (!thumbUrl && attempts >= 40) throw new Error("Délai de rendu miniature dépassé");
+    } catch (e) {
+      setThumbError(e.message);
+    }
+    setThumbLoading(false);
   };
 
   const handleFetchVisuals = async () => {
@@ -1006,6 +1050,39 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                           </div>
                         </div>
                       ))}
+
+                      {/* MINIATURE / COUVERTURE */}
+                      <div style={{ marginTop: 4, marginBottom: 12, padding: 12, background: T.bg2, borderRadius: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted }}>
+                            MINIATURE {pipelineScript.thumbnail_word ? `· mot-choc : "${pipelineScript.thumbnail_word}"` : ""}
+                          </span>
+                          <button
+                            onClick={handleGenerateThumbnail}
+                            disabled={thumbLoading}
+                            style={{
+                              fontSize: 10, fontFamily: T.mono, fontWeight: 700,
+                              background: thumbLoading ? T.accentDim : "transparent",
+                              color: T.accent, border: `1px solid ${T.accent}`,
+                              borderRadius: 4, padding: "4px 12px", cursor: thumbLoading ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {thumbLoading ? <>GÉNÉRATION <Spinner /></> : "🖼 GÉNÉRER LA MINIATURE"}
+                          </button>
+                        </div>
+                        <div style={{ fontSize: 10, color: T.muted, lineHeight: 1.5, marginBottom: thumbUrl || thumbError ? 8 : 0 }}>
+                          Couverture sans sous-titre, mot-choc en gros. Utile pour ta grille de chaîne et le partage.
+                        </div>
+                        {thumbError && <div style={{ fontSize: 11, color: T.red }}>{thumbError}</div>}
+                        {thumbUrl && (
+                          <div>
+                            <img src={thumbUrl} alt="miniature" style={{ width: "100%", maxWidth: 200, borderRadius: 8, display: "block" }} />
+                            <a href={thumbUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: T.accent, fontFamily: T.mono, textDecoration: "none", display: "inline-block", marginTop: 6 }}>
+                              ↗ Télécharger la miniature
+                            </a>
+                          </div>
+                        )}
+                      </div>
 
                       <a
                         href="https://studio.youtube.com/channel/UClW3vKJDea-ZZu861ly8rhQ/videos/upload"
