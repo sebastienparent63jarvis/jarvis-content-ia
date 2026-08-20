@@ -51,6 +51,7 @@ Principe directeur : TENSION NARRATIVE CONTINUE, du hook jusqu'à la dernière s
 
 Règles de forme :
 5. Le texte de narration doit être écrit pour être lu à voix haute (phrases courtes, rythme oral). Chaque segment COURT — une à deux phrases brèves (12 à 20 mots). Vise 14 à 20 segments pour une vidéo d'environ 90 secondes (plafond 120s).
+5bis. LIMITE STRICTE : le total de tous les champs "text" de narration mis bout à bout ne doit JAMAIS dépasser 1900 caractères (contrainte technique de la synthèse vocale). Reste nettement en dessous. Si tu approches la limite, réduis le nombre de segments plutôt que de dépasser. Une vidéo un peu plus courte mais complète vaut mieux qu'une vidéo tronquée.
 6. IMPORTANT pour la voix off : dans le champ "text" de narration, écris TOUS les nombres, montants et pourcentages EN TOUTES LETTRES (ex: "mille cinq cents euros" et non "1500€", "vingt-cinq pour cent" et non "25%", "dix mille" et non "10k"). N'utilise aucun symbole (€, %, $, k) dans le texte de narration — ils sont mal lus par la synthèse vocale. Tu peux les garder en chiffres dans le titre et la description (qui sont affichés, pas lus).
 7. ÉVITE les homographes ambigus qui trompent la synthèse vocale — surtout les verbes qui s'écrivent comme un nom courant. Exemples à reformuler : "tu paramètres" (verbe) → préfère "tu programmes" ou "tu règles" ; "tu places" → "tu investis" ; "ils content" → "ils racontent". Si un mot peut se lire comme deux natures grammaticales différentes (nom/verbe), choisis un synonyme sans ambiguïté.
 8. Pour chaque segment, propose 2-3 mots-clés en ANGLAIS pour rechercher des visuels libres de droits.
@@ -92,5 +93,29 @@ export function extractScript(text) {
   let clean = text.replace(/```json|```/g, "").trim();
   const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
   if (s !== -1 && e !== -1 && e > s) clean = clean.slice(s, e + 1);
-  return JSON.parse(clean);
+  const script = JSON.parse(clean);
+  return enforceNarrationLimit(script, 1900);
+}
+
+// Garantit que la narration totale ne dépasse jamais `maxChars` (marge sous la
+// limite ElevenLabs de 2000). Si le modèle a trop écrit malgré la consigne, on
+// retire les DERNIERS segments jusqu'à repasser sous la limite — la voix off ne
+// sera donc jamais refusée. On note le rognage pour transparence.
+export function enforceNarrationLimit(script, maxChars = 1900) {
+  if (!script || !Array.isArray(script.narration_segments)) return script;
+  const total = (segs) => segs.reduce((n, s) => n + ((s && s.text) ? s.text.length : 0), 0);
+  if (total(script.narration_segments) <= maxChars) return script;
+
+  const kept = [];
+  let running = 0;
+  for (const seg of script.narration_segments) {
+    const len = (seg && seg.text) ? seg.text.length : 0;
+    if (running + len > maxChars) break;
+    kept.push(seg);
+    running += len;
+  }
+  // Sécurité : garder au moins un segment.
+  script.narration_segments = kept.length > 0 ? kept : script.narration_segments.slice(0, 1);
+  script._narration_trimmed = true; // indicateur (affichable si besoin)
+  return script;
 }

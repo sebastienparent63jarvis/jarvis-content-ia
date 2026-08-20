@@ -9,9 +9,6 @@
 //   SHOTSTACK_API_KEY : ta clé API Shotstack
 //   SHOTSTACK_ENV : "stage" (gratuit, avec watermark) ou "v1" (production payante)
 
-import { maskSvg, outroSvg } from "./_mask-svg.js";
-import { storeImagePng } from "./store-image.js";
-
 export default async (req, context) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
@@ -34,12 +31,9 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { audioUrl, audioSegments, segments, clips, title, category, word } = body;
-  // audioSegments (préféré): [{ index, url, duration }, ...] — durées RÉELLES
-  // audioUrl (ancien mode): un seul fichier, timing estimé (fallback)
-  // segments: [{ text, duration_estimate_sec }, ...]
-  // clips: [{ segment_index, clip: { link } }, ...]
-  // title/category/word: pour l'intro de marque (masque 3s) et l'outro logo
+  const { audioUrl, audioSegments, segments, clips, title, category, word, introMaskUrl, outroImgUrl } = body;
+  // introMaskUrl / outroImgUrl : images de marque déjà générées par
+  // generate-brand-images (isolé). Peuvent être null → vidéo sans intro/outro.
 
   const hasRealAudio = Array.isArray(audioSegments) && audioSegments.length > 0;
 
@@ -125,31 +119,10 @@ export default async (req, context) => {
   const totalDuration = cursor;
 
   // ---- INTRO : masque de marque (image PNG pixel-parfaite) sur 3s ----
-  // On génère le masque en SVG->PNG (rendu fidèle, identique à la miniature),
-  // on l'héberge, et on le donne à Shotstack comme simple calque image — il n'a
-  // plus à composer de HTML (ce qu'il ratait). Balayage vers la droite en sortie.
+  // Images de marque déjà générées en amont (generate-brand-images, isolé).
+  // assemble-video reste léger : aucune génération d'image ici, donc pas de
+  // module natif ni de calcul lourd → plus de 502.
   const INTRO_DUR = 3;
-  const host = req.headers.get("host");
-  let introMaskUrl = null;
-  let outroImgUrl = null;
-  let brandingWarning = null;
-  try {
-    // Import paresseux du moteur SVG->PNG (module natif) : si resvg ne se charge
-    // pas sur Netlify, on capte l'erreur ici au lieu de faire crasher toute la
-    // fonction à l'import — la vidéo s'assemble alors sans intro/outro.
-    const { svgToPng } = await import("./_mask-render.js");
-    if (title) {
-      const svg = maskSvg({ title, category, hookWord: word });
-      const pngB64 = svgToPng(svg, 1080).toString("base64");
-      introMaskUrl = await storeImagePng(pngB64, host);
-    }
-    const oPngB64 = svgToPng(outroSvg(), 1080).toString("base64");
-    outroImgUrl = await storeImagePng(oPngB64, host);
-  } catch (e) {
-    // On continue sans intro/outro plutôt que planter, mais on remonte la raison.
-    brandingWarning = "Intro/outro non générés: " + e.message;
-    console.error("[assemble-video] branding SVG échoué:", e);
-  }
 
   const introClips = introMaskUrl ? [{
     asset: { type: "image", src: introMaskUrl },
@@ -213,7 +186,7 @@ export default async (req, context) => {
     }
 
     return new Response(
-      JSON.stringify({ render_id: data.response?.id, env, total_duration: grandTotal, warning: brandingWarning }),
+      JSON.stringify({ render_id: data.response?.id, env, total_duration: grandTotal }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {

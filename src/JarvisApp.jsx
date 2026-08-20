@@ -262,9 +262,29 @@ export default function JarvisApp() {
     setVideoLoading(true);
     setVideoUrl(null);
     setVideoError(null);
-    setVideoStatus("Envoi de la recette de montage à Shotstack…");
+    setVideoStatus("Génération du masque de marque (intro + fin)…");
     try {
-      // 1. Lance l'assemblage
+      // 0. Génère les images de marque dans une fonction isolée (resvg).
+      //    Si ça échoue, on assemble quand même la vidéo SANS intro/outro.
+      let introMaskUrl = null, outroImgUrl = null;
+      try {
+        const bRes = await fetch("/api/generate-brand-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: pipelineScript.title,
+            category: pipelineScript.category,
+            word: pipelineScript.thumbnail_word,
+          }),
+        });
+        const bRaw = await bRes.text();
+        let bData; try { bData = JSON.parse(bRaw); } catch { bData = {}; }
+        if (bRes.ok) { introMaskUrl = bData.introMaskUrl; outroImgUrl = bData.outroImgUrl; }
+        else setVideoStatus("Masque de marque indisponible (" + (bData.error || "erreur") + ") — vidéo sans intro.");
+      } catch { setVideoStatus("Masque de marque indisponible — vidéo sans intro."); }
+
+      // 1. Lance l'assemblage (léger : ne fait plus que la recette Shotstack)
+      setVideoStatus("Envoi de la recette de montage à Shotstack…");
       const res = await fetch("/api/assemble-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -275,6 +295,8 @@ export default function JarvisApp() {
           title: pipelineScript.title,
           category: pipelineScript.category,
           word: pipelineScript.thumbnail_word,
+          introMaskUrl,
+          outroImgUrl,
         }),
       });
       const rawResp = await res.text();
@@ -282,7 +304,6 @@ export default function JarvisApp() {
       try { data = JSON.parse(rawResp); }
       catch { throw new Error(`Erreur assemblage (HTTP ${res.status}) : ${rawResp.slice(0, 200)}`); }
       if (!res.ok) throw new Error(data.error || "Erreur assemblage");
-      if (data.warning) setVideoStatus("Note : " + data.warning);
 
       const renderId = data.render_id;
       if (!renderId) throw new Error("Pas d'ID de rendu retourné");
