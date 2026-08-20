@@ -237,8 +237,8 @@ export default function JarvisApp() {
   const [copiedField, setCopiedField] = useState(null); // fiche de publication
   const [markedPublished, setMarkedPublished] = useState(false);
   const [audioError, setAudioError] = useState(null);
-  const [voiceId, setVoiceId] = useState("KGV4bLP8m7z8zXo2kC2X"); // voix FR choisie
-  const [voiceIdInput, setVoiceIdInput] = useState("KGV4bLP8m7z8zXo2kC2X");
+  const [voiceId, setVoiceId] = useState(""); // vide = la voix de Netlify (ELEVENLABS_VOICE_ID) fait autorité
+  const [voiceIdInput, setVoiceIdInput] = useState("");
   const [voiceSaved, setVoiceSaved] = useState(false);
 
   // Pipeline Shorts (Phase 3 — visuels)
@@ -322,14 +322,14 @@ export default function JarvisApp() {
     setThumbUrl(null);
     setThumbError(null);
     try {
-      // Fond : premier clip Pexels de la vidéo (cohérent visuellement).
-      const firstClip = (visuals && visuals.clips || []).find(c => c.clip && c.clip.link);
+      // Fond : image de preview du premier clip Pexels (frame fixe).
+      const firstClip = (visuals && visuals.clips || []).find(c => c.clip && (c.clip.preview || c.clip.link));
       const word = pipelineScript.thumbnail_word || (pipelineScript.title || "").split(" ").slice(0, 2).join(" ");
       const res = await fetch("/api/generate-thumbnail", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bgVideo: firstClip ? firstClip.clip.link : undefined,
+          bgImage: firstClip ? (firstClip.clip.preview || undefined) : undefined,
           title: pipelineScript.title,
           category: pipelineScript.category,
           word,
@@ -339,20 +339,8 @@ export default function JarvisApp() {
       let data;
       try { data = JSON.parse(raw); } catch { throw new Error(`Réponse inattendue (HTTP ${res.status})`); }
       if (!res.ok) throw new Error(data.error || "Erreur miniature");
-      const renderId = data.id;
-      if (!renderId) throw new Error("Pas d'ID de rendu retourné");
-
-      // Poll le rendu (image, plus rapide qu'une vidéo).
-      let attempts = 0;
-      while (attempts < 40) {
-        await sleep(3000);
-        attempts++;
-        const stRes = await fetch(`/api/render-status?id=${encodeURIComponent(renderId)}`);
-        const st = await stRes.json();
-        if (st.status === "done" && st.url) { setThumbUrl(st.url); break; }
-        if (st.status === "failed") throw new Error("Le rendu de la miniature a échoué");
-      }
-      if (!thumbUrl && attempts >= 40) throw new Error("Délai de rendu miniature dépassé");
+      if (!data.image_base64) throw new Error("Aucune image retournée");
+      setThumbUrl(`data:${data.mime || "image/png"};base64,${data.image_base64}`);
     } catch (e) {
       setThumbError(e.message);
     }
@@ -462,7 +450,7 @@ export default function JarvisApp() {
       const res = await fetch("/api/generate-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: fullText, voiceId }),
+        body: JSON.stringify({ text: fullText, voiceId: voiceId.trim() || undefined }),
       });
       const raw = await res.text();
       let data;
@@ -1407,11 +1395,11 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: voiceSaved ? T.green : T.muted }} />
                   <span style={{ fontSize: 12, color: voiceSaved ? T.green : T.muted, fontFamily: T.mono }}>
-                    {voiceSaved ? "Voix mise à jour ✓" : `Voix active : ${voiceId}`}
+                    {voiceSaved ? "Voix mise à jour ✓" : (voiceId.trim() ? `Voix forcée : ${voiceId}` : "Voix : celle de Netlify (par défaut)")}
                   </span>
                 </div>
                 <div style={{ marginTop: 12, padding: 10, background: `${T.blue}11`, borderRadius: 6, fontSize: 11, color: T.muted, lineHeight: 1.6 }}>
-                  Note : ce réglage s'applique pendant ta session. Quand l'automatisation tournera (Phase 6), la voix par défaut restera celle configurée dans Netlify (ELEVENLABS_VOICE_ID).
+                  Laisse vide pour utiliser la voix configurée dans Netlify (ELEVENLABS_VOICE_ID) — c'est la source de vérité. Ne renseigne un ID ici que pour forcer une autre voix le temps d'un test.
                 </div>
               </div>
 

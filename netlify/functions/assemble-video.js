@@ -9,7 +9,10 @@
 //   SHOTSTACK_API_KEY : ta clé API Shotstack
 //   SHOTSTACK_ENV : "stage" (gratuit, avec watermark) ou "v1" (production payante)
 
-import { brandGradientHtml, brandBadgeHtml, brandBandHtml, brandOutroHtml, BRAND } from "./_brand.js";
+import { brandOutroHtml, BRAND } from "./_brand.js";
+import { maskSvg, outroSvg } from "./_mask-svg.js";
+import { svgToPng } from "./_mask-render.js";
+import { storeImagePng } from "./store-image.js";
 
 export default async (req, context) => {
   if (req.method !== "POST") {
@@ -122,78 +125,57 @@ export default async (req, context) => {
 
   const totalDuration = cursor;
 
-  // ---- INTRO : masque de marque sur les 3 premières secondes ----
-  // Découpé en pièces positionnées par Shotstack (badge haut-gauche, bandeau
-  // bas, voile) — Shotstack ignore le position:absolute d'un bloc unique.
-  // L'ensemble disparaît par un balayage vers la droite après 3 s.
+  // ---- INTRO : masque de marque (image PNG pixel-parfaite) sur 3s ----
+  // On génère le masque en SVG->PNG (rendu fidèle, identique à la miniature),
+  // on l'héberge, et on le donne à Shotstack comme simple calque image — il n'a
+  // plus à composer de HTML (ce qu'il ratait). Balayage vers la droite en sortie.
   const INTRO_DUR = 3;
-  const introBadge = [];
-  const introBand = [];
-  const introGradient = [];
-  if (title) {
-    const swipe = { in: "fade", out: "slideRight" };
-    introBadge.push({
-      asset: { type: "html", html: brandBadgeHtml(), width: 620, height: 70 },
-      start: 0, length: INTRO_DUR, position: "topLeft", offset: { x: 0.03, y: -0.02 },
-      transition: swipe,
-    });
-    introBand.push({
-      asset: { type: "html", html: brandBandHtml({ title, category, hookWord: word }), width: 964, height: 620 },
-      start: 0, length: INTRO_DUR, position: "bottomLeft", offset: { x: 0.045, y: 0.03 },
-      transition: swipe,
-    });
-    introGradient.push({
-      asset: { type: "html", html: brandGradientHtml(), width: 1080, height: 1920 },
-      start: 0, length: INTRO_DUR, transition: swipe,
-    });
+  const host = req.headers.get("host");
+  let introMaskUrl = null;
+  let outroImgUrl = null;
+  try {
+    if (title) {
+      const svg = maskSvg({ title, category, hookWord: word });
+      const pngB64 = svgToPng(svg, 1080).toString("base64");
+      introMaskUrl = await storeImagePng(pngB64, host);
+    }
+    // Outro image (tampon AC violet plein)
+    const oPngB64 = svgToPng(outroSvg(), 1080).toString("base64");
+    outroImgUrl = await storeImagePng(oPngB64, host);
+  } catch (e) {
+    // Si l'hébergement échoue, on continue sans intro/outro plutôt que planter.
+    introMaskUrl = introMaskUrl || null;
   }
 
-  // ---- OUTRO : écran de fin de marque (logo) ajouté après le contenu ----
+  const introClips = introMaskUrl ? [{
+    asset: { type: "image", src: introMaskUrl },
+    start: 0, length: INTRO_DUR,
+    transition: { in: "fade", out: "slideRight" },
+  }] : [];
+
+  // ---- OUTRO : écran de fin (image PNG pixel-parfaite) après le contenu ----
   const OUTRO_DUR = 2.5;
-  const outroClips = [{
-    asset: {
-      type: "html",
-      html: brandOutroHtml(),
-      width: 1080,
-      height: 1920,
-    },
+  const outroClips = outroImgUrl ? [{
+    asset: { type: "image", src: outroImgUrl },
     start: totalDuration,
     length: OUTRO_DUR,
     transition: { in: "fade", out: "fade" },
-  }];
-  // Fond violet plein pendant l'outro (sous le logo, pour couvrir la vidéo).
-  const outroBg = [{
-    asset: { type: "html", html: `<div style="width:100%;height:100%;background:${BRAND.purple};"></div>`, width: 1080, height: 1920 },
-    start: totalDuration,
-    length: OUTRO_DUR,
-  }];
+  }] : [];
 
   const grandTotal = totalDuration + OUTRO_DUR;
 
   // Piste audio : soit les segments calés (mode réel), soit l'audio global (fallback).
-  // (L'audio couvre le contenu ; l'intro se superpose dessus sans décaler le son,
-  // et l'outro reste muet.)
   const audioTrack = hasRealAudio
     ? { clips: audioClips }
     : { clips: [{ asset: { type: "audio", src: audioUrl }, start: 0, length: totalDuration }] };
 
   const timeline = {
     background: "#000000",
-    // Polices de marque déclarées pour que l'intro/outro s'affichent correctement
-    // (Shotstack ne connaît Anton / Space Grotesk / Inter que si on les fournit).
-    fonts: [
-      { src: "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf" },
-      { src: "https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf" },
-      { src: "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf" },
-    ],
     tracks: [
-      { clips: introBadge },    // badge haut-gauche (intro 3s)
-      { clips: introBand },      // bandeau bas cat+titre (intro 3s)
-      { clips: introGradient },  // voile d'intro (3s, balayage sortie)
-      { clips: outroClips },     // logo de fin
+      { clips: introClips },     // masque d'intro (image PNG, 3s, balayage sortie)
+      { clips: outroClips },     // écran de fin (image PNG)
       { clips: captionClips },   // sous-titres
       { clips: videoClips },     // vidéo de fond
-      { clips: outroBg },        // fond violet de l'outro
       audioTrack,                // voix off
     ],
   };
