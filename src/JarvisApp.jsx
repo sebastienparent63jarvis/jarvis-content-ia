@@ -394,24 +394,35 @@ export default function JarvisApp() {
     setAudioUrlHosted(null);
     setVisuals(null);
     setVideoUrl(null);
+    const jobId = `script-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
-      const res = await fetch("/api/generate-script", {
+      // 1. Déclenche la génération en background (répond 202 immédiatement).
+      await fetch("/.netlify/functions/generate-script-background", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          jobId,
           topic: pipelineTopic.trim() || undefined,
           newsTheme: (typeof newsOverride === "string" && newsOverride) ? newsOverride : (pipelineNews.trim() || undefined),
           recentTopics: recentTopics.slice(0, 15),
         }),
       });
-      const rawResp = await res.text();
-      let data;
-      try {
-        data = JSON.parse(rawResp);
-      } catch {
-        throw new Error(`Réponse inattendue (HTTP ${res.status}) : ${rawResp.slice(0, 200)}`);
+
+      // 2. Poll le résultat jusqu'à done/error (max ~2,5 min).
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      let data = null;
+      for (let i = 0; i < 60; i++) {
+        await sleep(2500);
+        const r = await fetch(`/api/script-result?jobId=${encodeURIComponent(jobId)}`);
+        const raw = await r.text();
+        let d;
+        try { d = JSON.parse(raw); } catch { continue; }
+        if (d.status === "done") { data = d; break; }
+        if (d.status === "error") throw new Error((d.error || "Erreur génération") + (d.raw ? " — " + d.raw.slice(0, 150) : ""));
+        // pending → on continue à attendre
       }
-      if (!res.ok) throw new Error(data.error || `Erreur HTTP ${res.status}` + (data.raw ? " — " + JSON.stringify(data.raw).slice(0, 200) : ""));
+      if (!data) throw new Error("La génération a dépassé le délai d'attente. Réessaie.");
+
       setPipelineScript(data.script);
       setRecentTopics(prev => [data.script.title, ...prev].slice(0, 30));
 
