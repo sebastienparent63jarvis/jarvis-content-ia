@@ -76,11 +76,14 @@ export default async (req, context) => {
   // sinon variable d'environnement, sinon défaut.
   const voiceId = requestVoiceId || process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
 
-  // Garde-fou : limite la longueur pour éviter de brûler des crédits
-  // sur une requête anormale (un Short = ~700-900 caractères max).
-  if (text.length > 1500) {
+  // Garde-fou : limite la longueur pour éviter de brûler des crédits sur une
+  // requête anormale. Calibré sur la durée cible actuelle (~90s, plafond 120s).
+  // Français parlé ≈ 15 caractères/seconde : 120s ≈ 1800 caractères, on met la
+  // barre à 2200 pour couvrir le plafond avec marge, tout en bloquant une vraie
+  // dérive (un script de plusieurs milliers de caractères reste stoppé).
+  if (text.length > 2200) {
     return new Response(
-      JSON.stringify({ error: `Texte trop long (${text.length} caractères, max 1500). Garde-fou anti-surconsommation de crédits.` }),
+      JSON.stringify({ error: `Texte trop long (${text.length} caractères, max 2200). Garde-fou anti-surconsommation de crédits.` }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }

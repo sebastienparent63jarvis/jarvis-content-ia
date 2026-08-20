@@ -53,7 +53,7 @@ VOIX ÉDITORIALE INCARNÉE (levier attachement, sur TOUT le script) : écris à 
 Principe directeur : TENSION NARRATIVE CONTINUE, du hook jusqu'à la dernière seconde. Deux boucles (une au début, une au milieu), la seconde ne se refermant qu'à la fin. Jamais de segment "plat". Si un segment ne donne pas envie de voir le suivant, réécris-le.
 
 Règles de forme :
-5. Le texte de narration doit être écrit pour être lu à voix haute (phrases courtes, rythme oral). Chaque segment COURT — une à deux phrases brèves (12 à 20 mots). Vise 8 à 12 segments pour un Short de 50 secondes.
+5. Le texte de narration doit être écrit pour être lu à voix haute (phrases courtes, rythme oral). Chaque segment COURT — une à deux phrases brèves (12 à 20 mots). Vise 14 à 20 segments pour une vidéo d'environ 90 secondes (plafond 120s).
 6. IMPORTANT pour la voix off : dans le champ "text" de narration, écris TOUS les nombres, montants et pourcentages EN TOUTES LETTRES (ex: "mille cinq cents euros" et non "1500€", "vingt-cinq pour cent" et non "25%", "dix mille" et non "10k"). N'utilise aucun symbole (€, %, $, k) dans le texte de narration — ils sont mal lus par la synthèse vocale. Tu peux les garder en chiffres dans le titre et la description (qui sont affichés, pas lus).
 7. ÉVITE les homographes ambigus qui trompent la synthèse vocale — surtout les verbes qui s'écrivent comme un nom courant. Exemples à reformuler : "tu paramètres" (verbe) → préfère "tu programmes" ou "tu règles" ; "tu places" → "tu investis" ; "ils content" → "ils racontent". Si un mot peut se lire comme deux natures grammaticales différentes (nom/verbe), choisis un synonyme sans ambiguïté.
 8. Pour chaque segment, propose 2-3 mots-clés en ANGLAIS pour rechercher des visuels libres de droits.
