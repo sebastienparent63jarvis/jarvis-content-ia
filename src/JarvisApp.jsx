@@ -277,8 +277,12 @@ export default function JarvisApp() {
           word: pipelineScript.thumbnail_word,
         }),
       });
-      const data = await res.json();
+      const rawResp = await res.text();
+      let data;
+      try { data = JSON.parse(rawResp); }
+      catch { throw new Error(`Erreur assemblage (HTTP ${res.status}) : ${rawResp.slice(0, 200)}`); }
       if (!res.ok) throw new Error(data.error || "Erreur assemblage");
+      if (data.warning) setVideoStatus("Note : " + data.warning);
 
       const renderId = data.render_id;
       if (!renderId) throw new Error("Pas d'ID de rendu retourné");

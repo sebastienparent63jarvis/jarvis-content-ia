@@ -9,9 +9,7 @@
 //   SHOTSTACK_API_KEY : ta clé API Shotstack
 //   SHOTSTACK_ENV : "stage" (gratuit, avec watermark) ou "v1" (production payante)
 
-import { brandOutroHtml, BRAND } from "./_brand.js";
 import { maskSvg, outroSvg } from "./_mask-svg.js";
-import { svgToPng } from "./_mask-render.js";
 import { storeImagePng } from "./store-image.js";
 
 export default async (req, context) => {
@@ -52,6 +50,7 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "segments manquants" }), { status: 400 });
   }
 
+  try {
   // Map des durées réelles et URLs par index de segment (si dispo).
   const realByIndex = {};
   if (hasRealAudio) {
@@ -133,18 +132,23 @@ export default async (req, context) => {
   const host = req.headers.get("host");
   let introMaskUrl = null;
   let outroImgUrl = null;
+  let brandingWarning = null;
   try {
+    // Import paresseux du moteur SVG->PNG (module natif) : si resvg ne se charge
+    // pas sur Netlify, on capte l'erreur ici au lieu de faire crasher toute la
+    // fonction à l'import — la vidéo s'assemble alors sans intro/outro.
+    const { svgToPng } = await import("./_mask-render.js");
     if (title) {
       const svg = maskSvg({ title, category, hookWord: word });
       const pngB64 = svgToPng(svg, 1080).toString("base64");
       introMaskUrl = await storeImagePng(pngB64, host);
     }
-    // Outro image (tampon AC violet plein)
     const oPngB64 = svgToPng(outroSvg(), 1080).toString("base64");
     outroImgUrl = await storeImagePng(oPngB64, host);
   } catch (e) {
-    // Si l'hébergement échoue, on continue sans intro/outro plutôt que planter.
-    introMaskUrl = introMaskUrl || null;
+    // On continue sans intro/outro plutôt que planter, mais on remonte la raison.
+    brandingWarning = "Intro/outro non générés: " + e.message;
+    console.error("[assemble-video] branding SVG échoué:", e);
   }
 
   const introClips = introMaskUrl ? [{
@@ -209,13 +213,20 @@ export default async (req, context) => {
     }
 
     return new Response(
-      JSON.stringify({ render_id: data.response?.id, env, total_duration: grandTotal }),
+      JSON.stringify({ render_id: data.response?.id, env, total_duration: grandTotal, warning: brandingWarning }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
     return new Response(JSON.stringify({ error: "Échec connexion Shotstack: " + err.message }), {
       status: 502,
       headers: { "Content-Type": "application/json" },
+    });
+  }
+  } catch (fatal) {
+    // Filet global : toute erreur inattendue (traitement segments, timeline,
+    // module SVG…) est renvoyée en clair au lieu de faire crasher la fonction.
+    return new Response(JSON.stringify({ error: "Erreur assemblage (détail): " + fatal.message }), {
+      status: 500, headers: { "Content-Type": "application/json" },
     });
   }
 };
