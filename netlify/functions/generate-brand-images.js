@@ -1,11 +1,8 @@
-// Génère les images de marque (masque d'intro + écran de fin) en PNG via resvg,
-// les héberge dans Blobs, et renvoie leurs URLs. ISOLÉE dans sa propre fonction :
-// si resvg (module natif) plante ou est lent, ça n'affecte QUE cette étape —
-// l'assemblage vidéo reste léger et robuste. Le front l'appelle avant
-// l'assemblage et passe les URLs à assemble-video.
+// Génère les images de marque (masque d'intro transparent + écran de fin) via
+// HCTI, et renvoie leurs URLs (HCTI les héberge — pas besoin de Blobs).
+// Ces URLs sont ensuite données à Shotstack comme calques image.
 
-import { maskSvg, outroSvg } from "./_mask-svg.js";
-import { storeImagePng } from "./store-image.js";
+import { maskHtml, outroHtml, renderViaHcti } from "./_mask-html.js";
 
 export default async (req, context) => {
   if (req.method !== "POST") {
@@ -18,29 +15,20 @@ export default async (req, context) => {
   }
 
   const { title, category, word } = body;
-  const host = req.headers.get("host");
 
   try {
-    // Import paresseux du moteur natif : une erreur de chargement est captée ici.
-    const { svgToPng } = await import("./_mask-render.js");
-
     let introMaskUrl = null;
-    let outroImgUrl = null;
-
     if (title) {
-      const svg = maskSvg({ title, category, hookWord: word });
-      const pngB64 = svgToPng(svg, 1080).toString("base64");
-      introMaskUrl = await storeImagePng(pngB64, host);
+      // Masque transparent (sans fond) pour superposer sur la vidéo.
+      const html = maskHtml({ title, category, hookWord: word, bgUrl: null });
+      introMaskUrl = await renderViaHcti(html, { transparent: true });
     }
-    const oPngB64 = svgToPng(outroSvg(), 1080).toString("base64");
-    outroImgUrl = await storeImagePng(oPngB64, host);
+    const outroImgUrl = await renderViaHcti(outroHtml());
 
     return new Response(JSON.stringify({ introMaskUrl, outroImgUrl }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    // Échec (resvg indisponible, stockage KO…) : on renvoie une erreur claire.
-    // Le front pourra assembler la vidéo SANS intro/outro plutôt que d'échouer.
     return new Response(JSON.stringify({ error: "Génération images de marque échouée: " + err.message }), {
       status: 502, headers: { "Content-Type": "application/json" },
     });

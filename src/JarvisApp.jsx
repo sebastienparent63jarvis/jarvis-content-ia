@@ -364,8 +364,8 @@ export default function JarvisApp() {
       let data;
       try { data = JSON.parse(raw); } catch { throw new Error(`Réponse inattendue (HTTP ${res.status})`); }
       if (!res.ok) throw new Error(data.error || "Erreur miniature");
-      if (!data.image_base64) throw new Error("Aucune image retournée");
-      setThumbUrl(`data:${data.mime || "image/png"};base64,${data.image_base64}`);
+      if (!data.url) throw new Error("Aucune image retournée");
+      setThumbUrl(data.url);
     } catch (e) {
       setThumbError(e.message);
     }
