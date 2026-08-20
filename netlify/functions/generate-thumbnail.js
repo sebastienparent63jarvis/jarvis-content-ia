@@ -5,7 +5,7 @@
 // Utilise Shotstack en mode image (output.format = "jpg").
 // Variables : SHOTSTACK_API_KEY, SHOTSTACK_ENV ("stage" ou "v1").
 
-import { brandMaskHtml } from "./_brand.js";
+import { brandGradientHtml, brandBadgeHtml, brandBandHtml } from "./_brand.js";
 
 export default async (req, context) => {
   if (req.method !== "POST") {
@@ -43,19 +43,27 @@ export default async (req, context) => {
     bgAsset = { type: "html", html: `<div style="width:100%;height:100%;background:#7D4698;"></div>`, width: 1080, height: 1920 };
   }
 
-  // Masque de marque (identique à l'intro vidéo).
-  const maskHtml = brandMaskHtml({ title: titleText, category, hookWord });
-
+  // Chaque pièce du masque est un clip séparé, positionné par Shotstack
+  // (position + offset) — c'est la seule méthode fiable, Shotstack ignore le
+  // position:absolute interne d'un gros bloc HTML.
+  const L = { start: 0, length: 1 };
   const timeline = {
     background: "#000000",
     fonts: [
-      { src: "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf" },
       { src: "https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf" },
       { src: "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf" },
     ],
     tracks: [
-      { clips: [{ asset: { type: "html", html: maskHtml, width: 1080, height: 1920 }, start: 0, length: 1 }] },
-      { clips: [{ asset: bgAsset, start: 0, length: 1, fit: "cover" }] },
+      // Badge haut-gauche
+      { clips: [{ asset: { type: "html", html: brandBadgeHtml(), width: 620, height: 70 },
+        ...L, position: "topLeft", offset: { x: 0.03, y: -0.02 } }] },
+      // Bandeau bas (catégorie + titre)
+      { clips: [{ asset: { type: "html", html: brandBandHtml({ title: titleText, category, hookWord }), width: 964, height: 620 },
+        ...L, position: "bottomLeft", offset: { x: 0.045, y: 0.03 } }] },
+      // Voile dégradé plein cadre
+      { clips: [{ asset: { type: "html", html: brandGradientHtml(), width: 1080, height: 1920 }, ...L }] },
+      // Fond (image/vidéo Pexels)
+      { clips: [{ asset: bgAsset, ...L, fit: "cover" }] },
     ],
   };
 

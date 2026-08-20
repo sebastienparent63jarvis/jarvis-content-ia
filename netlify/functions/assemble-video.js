@@ -9,7 +9,7 @@
 //   SHOTSTACK_API_KEY : ta clé API Shotstack
 //   SHOTSTACK_ENV : "stage" (gratuit, avec watermark) ou "v1" (production payante)
 
-import { brandMaskHtml, brandOutroHtml, BRAND } from "./_brand.js";
+import { brandGradientHtml, brandBadgeHtml, brandBandHtml, brandOutroHtml, BRAND } from "./_brand.js";
 
 export default async (req, context) => {
   if (req.method !== "POST") {
@@ -123,22 +123,28 @@ export default async (req, context) => {
   const totalDuration = cursor;
 
   // ---- INTRO : masque de marque sur les 3 premières secondes ----
-  // Superposé au tout début de la vidéo (par-dessus le 1er clip + 1er sous-titre),
-  // il disparaît par un balayage vers la droite ("slideRight") après 3 s.
+  // Découpé en pièces positionnées par Shotstack (badge haut-gauche, bandeau
+  // bas, voile) — Shotstack ignore le position:absolute d'un bloc unique.
+  // L'ensemble disparaît par un balayage vers la droite après 3 s.
   const INTRO_DUR = 3;
-  const introClips = [];
+  const introBadge = [];
+  const introBand = [];
+  const introGradient = [];
   if (title) {
-    introClips.push({
-      asset: {
-        type: "html",
-        html: brandMaskHtml({ title, category, hookWord: word }),
-        width: 1080,
-        height: 1920,
-      },
-      start: 0,
-      length: INTRO_DUR,
-      // Entrée en fondu, SORTIE en balayage vers la droite.
-      transition: { in: "fade", out: "slideRight" },
+    const swipe = { in: "fade", out: "slideRight" };
+    introBadge.push({
+      asset: { type: "html", html: brandBadgeHtml(), width: 620, height: 70 },
+      start: 0, length: INTRO_DUR, position: "topLeft", offset: { x: 0.03, y: -0.02 },
+      transition: swipe,
+    });
+    introBand.push({
+      asset: { type: "html", html: brandBandHtml({ title, category, hookWord: word }), width: 964, height: 620 },
+      start: 0, length: INTRO_DUR, position: "bottomLeft", offset: { x: 0.045, y: 0.03 },
+      transition: swipe,
+    });
+    introGradient.push({
+      asset: { type: "html", html: brandGradientHtml(), width: 1080, height: 1920 },
+      start: 0, length: INTRO_DUR, transition: swipe,
     });
   }
 
@@ -181,12 +187,14 @@ export default async (req, context) => {
       { src: "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf" },
     ],
     tracks: [
-      { clips: introClips },   // tout en haut : masque d'intro (3s, balayage sortie)
-      { clips: outroClips },   // logo de fin
-      { clips: captionClips }, // sous-titres
-      { clips: videoClips },   // vidéo de fond
-      { clips: outroBg },      // fond violet de l'outro
-      audioTrack,              // voix off
+      { clips: introBadge },    // badge haut-gauche (intro 3s)
+      { clips: introBand },      // bandeau bas cat+titre (intro 3s)
+      { clips: introGradient },  // voile d'intro (3s, balayage sortie)
+      { clips: outroClips },     // logo de fin
+      { clips: captionClips },   // sous-titres
+      { clips: videoClips },     // vidéo de fond
+      { clips: outroBg },        // fond violet de l'outro
+      audioTrack,                // voix off
     ],
   };
 
