@@ -4,19 +4,26 @@ import { useState, useEffect, useCallback } from "react";
 // Dark command-center aesthetic: deep navy base, electric amber accent,
 // monospace data readouts. Feels like a Bloomberg terminal meets a war room.
 const T = {
-  bg0: "#080C14",
-  bg1: "#0D1321",
-  bg2: "#121929",
-  border: "#1E2D45",
-  accent: "#F5A623",
-  accentDim: "#7A4E0A",
-  green: "#00D97E",
-  red: "#FF4757",
-  blue: "#3A86FF",
-  text: "#E8EDF5",
-  muted: "#5A6A82",
+  // Fond sombre profond teinté aubergine (cohérent avec le violet Tor)
+  bg0: "#0B0710",
+  bg1: "#140D1C",
+  bg2: "#1C1228",
+  border: "rgba(180,140,210,0.16)",       // bordure "verre" translucide violacée
+  accent: "#7D4698",                        // violet Tor officiel
+  accentDim: "#3A2247",
+  accentGlow: "rgba(125,70,152,0.45)",      // halo lumineux violet
+  green: "#3DD68C",
+  red: "#FF5C72",
+  blue: "#9B8CFF",
+  text: "#F3EEF8",
+  muted: "#9A8CA8",                          // texte secondaire lavande grisé
   mono: "'JetBrains Mono', 'Courier New', monospace",
   sans: "'Inter', 'Segoe UI', system-ui, sans-serif",
+  // Matériaux "Liquid Glass"
+  glass: "rgba(40,26,54,0.55)",             // panneau verre dépoli
+  glassSolid: "rgba(28,18,40,0.92)",        // verre plus opaque (zones de texte)
+  glassHi: "rgba(255,255,255,0.06)",        // highlight de bord supérieur
+  blur: "saturate(160%) blur(20px)",        // flou d'arrière-plan
 };
 
 // ── HELPERS ─────────────────────────────────────────────────────────────────
@@ -98,7 +105,7 @@ function Badge({ color, children }) {
 function DecisionCard({ entry }) {
   return (
     <div style={{
-      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8,
+      background: T.glassSolid, border: `1px solid ${T.border}`, borderRadius: 8,
       padding: "14px 16px", marginBottom: 10,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -140,9 +147,7 @@ export default function JarvisApp() {
   const [pulse, setPulse] = useState(false);
 
   // Pipeline Shorts (Phase 1)
-  const [pipelineSlot, setPipelineSlot] = useState("matin");
   const [pipelineNews, setPipelineNews] = useState(""); // thème d'actualité optionnel
-  const [pipelineStyle, setPipelineStyle] = useState("actualite_punchy"); // 2 styles
   const [newsTopics, setNewsTopics] = useState(null); // sujets d'actu proposés
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState(null);
@@ -395,8 +400,6 @@ export default function JarvisApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: pipelineTopic.trim() || undefined,
-          slot: pipelineSlot,
-          style: pipelineStyle,
           newsTheme: (typeof newsOverride === "string" && newsOverride) ? newsOverride : (pipelineNews.trim() || undefined),
           recentTopics: recentTopics.slice(0, 15),
         }),
@@ -427,7 +430,7 @@ export default function JarvisApp() {
         type: "SCRIPT SHORTS",
         decision: data.script.title,
         rationale: (data.script.category ? `[${data.script.category}] ` : "") + (data.script.rationale || ""),
-        kpi: `~${data.script.total_duration_estimate_sec}s · créneau ${pipelineSlot}`,
+        kpi: `~${data.script.total_duration_estimate_sec}s`,
       });
     } catch (e) {
       setPipelineError(e.message);
@@ -488,13 +491,6 @@ export default function JarvisApp() {
   };
 
 
-  const SLOTS = [
-    { id: "matin", label: "Matin", time: "07h30", desc: "Routine / motivation" },
-    { id: "midi", label: "Midi", time: "12h30", desc: "Pause active" },
-    { id: "soir", label: "Soir", time: "19h30", desc: "Pic d'audience" },
-  ];
-
-
   // Pulse animation on new log entry
   useEffect(() => {
     if (log.length > 0) { setPulse(true); setTimeout(() => setPulse(false), 600); }
@@ -510,7 +506,7 @@ export default function JarvisApp() {
     { id: "script", label: "📝 Script complet", desc: "Script structuré PSP" },
     { id: "shorts", label: "📱 YouTube Shorts", desc: "Script Shorts < 60 secondes" },
     { id: "thumbnail", label: "🖼 Brief thumbnail", desc: "Brief visuel pour miniature" },
-    { id: "trend", label: "📊 Analyse tendances", desc: "Veille niche Finance×IA" },
+    { id: "trend", label: "📊 Analyse tendances", desc: "Veille actu mondiale" },
   ];
 
   const handleGenerate = async () => {
@@ -568,23 +564,46 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
 
   // ── LAYOUT ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", background: T.bg0, color: T.text, fontFamily: T.sans, display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: T.bg0, color: T.text, fontFamily: T.sans, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+
+      {/* Ambient Liquid-Glass background : halos violets diffus + grain doux */}
+      <style>{`
+        @keyframes acFloat { 0%{transform:translate(0,0)} 50%{transform:translate(40px,-30px)} 100%{transform:translate(0,0)} }
+        .ac-glass { background: ${T.glass}; -webkit-backdrop-filter: ${T.blur}; backdrop-filter: ${T.blur};
+          border: 1px solid ${T.border}; box-shadow: inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36); }
+        .ac-panel { background: ${T.glass}; -webkit-backdrop-filter: ${T.blur}; backdrop-filter: ${T.blur};
+          border: 1px solid ${T.border}; border-radius: 20px;
+          box-shadow: inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36); }
+        input::placeholder, textarea::placeholder { color: ${T.muted}; opacity: 0.7; }
+        * { scrollbar-color: ${T.accent} transparent; }
+      `}</style>
+      <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "-10%", left: "-5%", width: 520, height: 520, borderRadius: "50%",
+          background: `radial-gradient(circle, ${T.accentGlow} 0%, transparent 70%)`, filter: "blur(40px)", animation: "acFloat 18s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", bottom: "-15%", right: "-8%", width: 620, height: 620, borderRadius: "50%",
+          background: `radial-gradient(circle, rgba(125,70,152,0.30) 0%, transparent 70%)`, filter: "blur(50px)", animation: "acFloat 22s ease-in-out infinite reverse" }} />
+        <div style={{ position: "absolute", top: "40%", left: "55%", width: 360, height: 360, borderRadius: "50%",
+          background: `radial-gradient(circle, rgba(155,140,255,0.14) 0%, transparent 70%)`, filter: "blur(40px)", animation: "acFloat 26s ease-in-out infinite" }} />
+      </div>
+
+      {/* Tout le contenu au-dessus du fond ambiant */}
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
 
       {/* TOP BAR */}
-      <header style={{
-        background: T.bg1, borderBottom: `1px solid ${T.border}`,
+      <header className="ac-glass" style={{
         padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
-        position: "sticky", top: 0, zIndex: 100,
+        position: "sticky", top: 0, zIndex: 100, borderRadius: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
-            width: 32, height: 32, background: T.accent, borderRadius: 6,
+            width: 34, height: 34, background: T.accent, borderRadius: 9,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 900, fontSize: 16, color: T.bg0, fontFamily: T.mono,
-          }}>J</div>
+            fontWeight: 800, fontSize: 15, color: "#fff", fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+            boxShadow: `0 0 16px ${T.accentGlow}`, letterSpacing: "-0.5px",
+          }}>AC</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: "0.03em" }}>JARVIS</div>
-            <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono }}>Finance × IA Content Engine</div>
+            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: "0.12em" }}>ACTU CRUE</div>
+            <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono }}>Moteur de contenu</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -598,9 +617,9 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
       <div style={{ display: "flex", flex: 1 }}>
 
         {/* SIDEBAR */}
-        <nav style={{
-          width: 200, background: T.bg1, borderRight: `1px solid ${T.border}`,
-          padding: "20px 0", display: "flex", flexDirection: "column", gap: 2,
+        <nav className="ac-glass" style={{
+          width: 200, padding: "20px 0", display: "flex", flexDirection: "column", gap: 2,
+          borderRadius: 0, borderRight: `1px solid ${T.border}`,
         }}>
           {[
             { id: "dashboard", icon: "⬡", label: "Dashboard" },
@@ -612,8 +631,8 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
           ].map(item => (
             <button key={item.id} onClick={() => { setView(item.id); if (item.id === "history") loadHistory(); }} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 20px",
-              background: view === item.id ? T.bg2 : "transparent",
-              color: view === item.id ? T.accent : T.muted,
+              background: view === item.id ? `linear-gradient(90deg, ${T.accentGlow}, transparent)` : "transparent",
+              color: view === item.id ? "#fff" : T.muted,
               border: "none", borderLeft: view === item.id ? `2px solid ${T.accent}` : "2px solid transparent",
               cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 600 : 400,
               textAlign: "left", width: "100%", transition: "all 0.15s",
@@ -647,17 +666,17 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 Vue d'ensemble
               </h2>
               <p style={{ color: T.muted, fontSize: 13, marginBottom: 28 }}>
-                Moteur autonome — niche Finance × IA — YouTube FR
+                Moteur autonome — actualité mondiale décryptée — YouTube
               </p>
 
               {/* STATS */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
                 {[
-                  { label: "RPM cible", value: "$25–50", sub: "Finance × IA niche", color: T.accent },
+                  { label: "Format cible", value: "~90s", sub: "Actu mondiale → toi", color: T.accent },
                   { label: "Décisions loguées", value: log.length, sub: "aujourd'hui", color: T.blue },
                   { label: "Rapport email", value: savedEmail ? "✓ configuré" : "non configuré", sub: savedEmail || "→ Paramètres", color: savedEmail ? T.green : T.red },
                 ].map((s, i) => (
-                  <div key={i} style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 20 }}>
+                  <div key={i} style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)` }}>
                     <div style={{ fontSize: 11, color: T.muted, fontFamily: T.mono, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</div>
                     <div style={{ fontSize: 28, fontWeight: 800, color: s.color, fontFamily: T.mono }}>{s.value}</div>
                     <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{s.sub}</div>
@@ -666,18 +685,18 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               </div>
 
               {/* MARKET INTEL */}
-              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 20, marginBottom: 20 }}>
+              <div style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)`, marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                  ◈ Intelligence marché — données 2026
+                  ◈ Champ éditorial — Actu Crue
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   {[
-                    { label: "CPM Finance YouTube", value: "$15 – $45", trend: "▲" },
-                    { label: "RPM Personal Finance", value: "$25 – $50", trend: "▲" },
-                    { label: "CPM Tech/IA", value: "$8 – $25", trend: "▲" },
-                    { label: "Concurrence niche hybride", value: "Faible", trend: "✓" },
+                    { label: "Géopolitique & éco", value: "Cœur de cible", trend: "◆" },
+                    { label: "Business & marchés", value: "Fort impact", trend: "◆" },
+                    { label: "Tech · Science · Santé", value: "À suivre", trend: "◆" },
+                    { label: "Angle : retombées pour toi", value: "Signature", trend: "✓" },
                   ].map((m, i) => (
-                    <div key={i} style={{ padding: "10px 14px", background: T.bg0, borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div key={i} style={{ padding: "10px 14px", background: T.glassSolid, borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 12, color: T.muted }}>{m.label}</span>
                       <span style={{ fontFamily: T.mono, fontSize: 13, color: T.green, fontWeight: 700 }}>{m.trend} {m.value}</span>
                     </div>
@@ -700,55 +719,13 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
           {/* ── PIPELINE SHORTS (Phase 1) ── */}
           {view === "pipeline" && (
             <div>
-              <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Pipeline Shorts — Phase 1</h2>
+              <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Pipeline vidéo</h2>
               <p style={{ color: T.muted, fontSize: 13, marginBottom: 24 }}>
                 Génération du script structuré (audio + visuels + métadonnées). Phases suivantes : voix off, visuels stock, montage, publication.
               </p>
 
-              {/* SLOT SELECTOR */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, display: "block", marginBottom: 8 }}>CRÉNEAU DE PUBLICATION</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                  {SLOTS.map(s => (
-                    <button key={s.id} onClick={() => setPipelineSlot(s.id)} style={{
-                      padding: "10px 14px", background: pipelineSlot === s.id ? `${T.accent}22` : T.bg2,
-                      border: `1px solid ${pipelineSlot === s.id ? T.accent : T.border}`,
-                      borderRadius: 8, cursor: "pointer", textAlign: "left",
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: pipelineSlot === s.id ? T.accent : T.text }}>{s.label}</span>
-                        <span style={{ fontSize: 11, fontFamily: T.mono, color: T.muted }}>{s.time}</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: T.muted }}>{s.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* STYLE SELECTOR (2 styles) */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, display: "block", marginBottom: 8 }}>
-                  STYLE DE CONTENU
-                </label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-                  {[
-                    { id: "actualite_punchy", label: "Actualité punchy", desc: "Accroche à chaud sur un fait d'actu, angle finance vif" },
-                    { id: "solution_rapide", label: "Solution rapide financière", desc: "Problème d'argent concret → méthode actionnable" },
-                  ].map(st => (
-                    <button key={st.id} onClick={() => setPipelineStyle(st.id)} style={{
-                      padding: "10px 12px", background: pipelineStyle === st.id ? `${T.accent}22` : T.bg2,
-                      border: `1px solid ${pipelineStyle === st.id ? T.accent : T.border}`,
-                      borderRadius: 8, cursor: "pointer", textAlign: "left",
-                    }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: pipelineStyle === st.id ? T.accent : T.text, marginBottom: 3 }}>{st.label}</div>
-                      <div style={{ fontSize: 10, color: T.muted, lineHeight: 1.4 }}>{st.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* NEWS SEARCH — background web search, two modes */}
-              <div style={{ marginBottom: 16, padding: 14, background: T.bg0, borderRadius: 8, border: `1px solid ${T.border}` }}>
+              <div style={{ marginBottom: 16, padding: 14, background: T.glassSolid, borderRadius: 12, border: `1px solid ${T.border}` }}>
                 <label style={{ fontSize: 12, color: T.accent, fontFamily: T.mono, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                   ◈ Recherche d'actualité (web)
                 </label>
@@ -757,7 +734,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   onChange={e => setPipelineNews(e.target.value)}
                   placeholder="Optionnel : oriente la recherche (ex: énergie, immobilier, Iran…)"
                   style={{
-                    width: "100%", background: T.bg2, border: `1px solid ${T.border}`,
+                    width: "100%", background: T.glassSolid, border: `1px solid ${T.border}`,
                     borderRadius: 8, padding: "10px 14px", color: T.text, fontSize: 13,
                     fontFamily: T.sans, boxSizing: "border-box", outline: "none", marginBottom: 10,
                   }}
@@ -803,7 +780,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                         disabled={pipelineLoading}
                         style={{
                           display: "block", width: "100%", textAlign: "left", marginBottom: 8,
-                          background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8,
+                          background: T.glassSolid, border: `1px solid ${T.border}`, borderRadius: 8,
                           padding: "10px 12px", cursor: pipelineLoading ? "not-allowed" : "pointer",
                         }}
                       >
@@ -819,14 +796,14 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               {/* TOPIC INPUT */}
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, display: "block", marginBottom: 6 }}>
-                  SUJET (optionnel — laisse vide pour que JARVIS choisisse)
+                  SUJET (optionnel — laisse vide pour un choix automatique)
                 </label>
                 <input
                   value={pipelineTopic}
                   onChange={e => setPipelineTopic(e.target.value)}
-                  placeholder="Ex: 3 erreurs qui ruinent ton épargne en 2026"
+                  placeholder="Ex: tensions au Moyen-Orient, décision de la BCE, percée IA…"
                   style={{
-                    width: "100%", background: T.bg2, border: `1px solid ${T.border}`,
+                    width: "100%", background: T.glassSolid, border: `1px solid ${T.border}`,
                     borderRadius: 8, padding: "12px 14px", color: T.text, fontSize: 13,
                     fontFamily: T.sans, boxSizing: "border-box", outline: "none",
                   }}
@@ -852,11 +829,11 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               )}
 
               {pipelineScript && (
-                <div style={{ marginTop: 24, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 20 }}>
+                <div style={{ marginTop: 24, background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                     <Badge color={T.accent}>SCRIPT GÉNÉRÉ</Badge>
                     <Badge color={T.green}>{pipelineScript.total_duration_estimate_sec}s</Badge>
-                    <Badge color={T.blue}>Créneau: {pipelineScript.best_post_window || pipelineSlot}</Badge>
+                    {pipelineScript.category && <Badge color={T.blue}>{pipelineScript.category}</Badge>}
                   </div>
 
                   <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{pipelineScript.title}</div>
@@ -868,7 +845,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
 
                   {(pipelineScript.narration_segments || []).map((seg, i) => (
                     <div key={i} style={{
-                      background: T.bg0, borderRadius: 8, padding: 14, marginBottom: 10,
+                      background: T.glassSolid, borderRadius: 12, padding: 14, marginBottom: 10,
                       borderLeft: `3px solid ${T.blue}`,
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -880,7 +857,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                         {(seg.visual_keywords || []).map((kw, j) => (
                           <span key={j} style={{
                             fontSize: 10, fontFamily: T.mono, color: T.muted,
-                            background: T.bg2, border: `1px solid ${T.border}`,
+                            background: T.glassSolid, border: `1px solid ${T.border}`,
                             borderRadius: 4, padding: "2px 8px",
                           }}>🎬 {kw}</span>
                         ))}
@@ -893,7 +870,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                     <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>{pipelineScript.rationale}</div>
                   </div>
 
-                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
+                  <div style={{ marginTop: 16, padding: 14, background: T.glassSolid, borderRadius: 12 }}>
                     <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       ◈ Phase 2 — Voix off (ElevenLabs)
                     </div>
@@ -926,7 +903,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   </div>
 
                   {/* PHASE 3 — VISUELS */}
-                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
+                  <div style={{ marginTop: 16, padding: 14, background: T.glassSolid, borderRadius: 12 }}>
                     <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       ◈ Phase 3 — Visuels (Pexels)
                     </div>
@@ -978,7 +955,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   </div>
 
                   {/* PHASE 4 — ASSEMBLAGE VIDÉO */}
-                  <div style={{ marginTop: 16, padding: 14, background: T.bg0, borderRadius: 8 }}>
+                  <div style={{ marginTop: 16, padding: 14, background: T.glassSolid, borderRadius: 12 }}>
                     <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       ◈ Phase 4 — Assemblage vidéo (Shotstack)
                     </div>
@@ -1021,7 +998,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
 
                   {/* PHASE 5 — FICHE DE PUBLICATION */}
                   {videoUrl && (
-                    <div style={{ marginTop: 16, padding: 16, background: T.bg0, borderRadius: 8, border: `1px solid ${T.accent}44` }}>
+                    <div style={{ marginTop: 16, padding: 16, background: T.glassSolid, borderRadius: 12, border: `1px solid ${T.accent}44` }}>
                       <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                         ◈ Phase 5 — Fiche de publication YouTube
                       </div>
@@ -1032,7 +1009,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                       {[
                         { label: "TITRE", value: pipelineScript.title },
                         { label: "DESCRIPTION", value: pipelineScript.description },
-                        { label: "CRÉNEAU CONSEILLÉ", value: SLOTS.find(s => s.id === (pipelineScript.best_post_window || pipelineSlot))?.label + " — " + (SLOTS.find(s => s.id === (pipelineScript.best_post_window || pipelineSlot))?.time || "") },
+                        { label: "CATÉGORIE", value: pipelineScript.category || "—" },
                       ].map((field, i) => (
                         <div key={i} style={{ marginBottom: 12 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -1153,7 +1130,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   placeholder="Ex: Comment investir son premier salaire en 2026 avec des outils IA..."
                   rows={3}
                   style={{
-                    width: "100%", background: T.bg2, border: `1px solid ${T.border}`,
+                    width: "100%", background: T.glassSolid, border: `1px solid ${T.border}`,
                     borderRadius: 8, padding: "12px 14px", color: T.text, fontSize: 13,
                     fontFamily: T.sans, resize: "vertical", boxSizing: "border-box",
                     outline: "none",
@@ -1177,7 +1154,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               {/* OUTPUT */}
               {output && (
                 <div style={{ marginTop: 24 }}>
-                  <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 20 }}>
+                  <div style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                       <Badge color={T.accent}>DÉCISION</Badge>
                       <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{output.decision}</span>
@@ -1185,7 +1162,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
 
                     {output.content && (
                       <div style={{
-                        background: T.bg0, borderRadius: 8, padding: 16, marginBottom: 16,
+                        background: T.glassSolid, borderRadius: 12, padding: 16, marginBottom: 16,
                         fontFamily: T.mono, fontSize: 13, color: T.text, lineHeight: 1.8,
                         whiteSpace: "pre-wrap", wordBreak: "break-word",
                       }}>
@@ -1195,13 +1172,13 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       {output.rationale && (
-                        <div style={{ background: T.bg0, borderRadius: 6, padding: 12 }}>
+                        <div style={{ background: T.glassSolid, borderRadius: 10, padding: 12 }}>
                           <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 4 }}>JUSTIFICATION</div>
                           <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>{output.rationale}</div>
                         </div>
                       )}
                       {output.next_action && (
-                        <div style={{ background: T.bg0, borderRadius: 6, padding: 12 }}>
+                        <div style={{ background: T.glassSolid, borderRadius: 10, padding: 12 }}>
                           <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 4 }}>ACTION SUIVANTE</div>
                           <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>{output.next_action}</div>
                         </div>
@@ -1283,7 +1260,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 const retColor = s.retention == null ? T.muted : s.retention >= 60 ? T.green : s.retention >= 45 ? T.accent : T.red;
                 const isOpen = openScriptId === s.id;
                 return (
-                  <div key={s.id} style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, marginBottom: 10 }}>
+                  <div key={s.id} style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)`, marginBottom: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>{s.title}</div>
@@ -1331,7 +1308,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                     </div>
 
                     {isOpen && (
-                      <div style={{ marginTop: 12, background: T.bg0, borderRadius: 8, padding: 14 }}>
+                      <div style={{ marginTop: 12, background: T.glassSolid, borderRadius: 12, padding: 14 }}>
                         {(s.segments || []).map((seg, i) => (
                           <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < s.segments.length - 1 ? `1px solid ${T.border}` : "none" }}>
                             <span style={{ fontSize: 10, fontFamily: T.mono, color: T.muted, marginRight: 8 }}>#{i + 1}</span>
@@ -1353,7 +1330,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               <p style={{ color: T.muted, fontSize: 13, marginBottom: 28 }}>Configure tes clés et notifications.</p>
 
               {/* EMAIL SECTION */}
-              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
+              <div style={{ background: T.glassSolid, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   ◈ Rapport quotidien — Email
                 </div>
@@ -1389,7 +1366,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               </div>
 
               {/* VOICE ID SECTION */}
-              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
+              <div style={{ background: T.glassSolid, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   ◈ Voix off — Voice ID ElevenLabs
                 </div>
@@ -1428,7 +1405,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               </div>
 
               {/* YOUTUBE API SECTION */}
-              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
+              <div style={{ background: T.glassSolid, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   ◈ YouTube Data API v3 (optionnel)
                 </div>
@@ -1472,7 +1449,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               </div>
 
               {/* NICHE INFO */}
-              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24 }}>
+              <div style={{ background: T.glassSolid, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24 }}>
                 <div style={{ fontSize: 11, fontFamily: T.mono, color: T.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   ◎ Stratégie définie par JARVIS
                 </div>
@@ -1496,6 +1473,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
           )}
 
         </main>
+      </div>
       </div>
     </div>
   );

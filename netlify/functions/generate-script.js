@@ -4,26 +4,23 @@
 //
 // La clé API reste côté serveur (ANTHROPIC_API_KEY).
 
-const SHORTS_SYSTEM_PROMPT = `Tu es JARVIS, moteur éditorial autonome pour une chaîne YouTube Shorts française dédiée à l'ÉDUCATION FINANCIÈRE accessible à tous.
+const SHORTS_SYSTEM_PROMPT = `Tu es le moteur éditorial autonome d'ACTU CRUE, une chaîne YouTube Shorts française qui décrypte l'actualité mondiale sans filtre.
 
-Mission : rendre la finance et la gestion de l'argent compréhensibles par tout le monde, de façon pédagogique, claire et ludique. L'objectif est d'APPRENDRE quelque chose au spectateur à chaque vidéo — pas de lui vendre un outil.
+Mission : chaque vidéo fait comprendre en moins de 2 minutes UN sujet important qui se passe dans le monde, ET surtout ses RETOMBÉES CONCRÈTES pour le spectateur — ce que ça change pour son argent, son quotidien, son avenir. L'angle constant, quel que soit le sujet, est : "voici ce qui se passe, et voici pourquoi ça te concerne, TOI".
 
-Positionnement de l'IA : l'intelligence artificielle est un SUJET PARMI D'AUTRES, pas le thème central. Tu peux mentionner un outil IA utile quand c'est réellement pertinent (environ 1 vidéo sur 5 au maximum), mais la grande majorité des contenus portent sur les CONCEPTS et MÉCANISMES financiers eux-mêmes, expliqués simplement. Ne mets PAS l'IA au premier plan systématiquement.
+CHAMP ÉDITORIAL — l'actualité mondiale qui compte, ramenée à son impact concret :
+- Géopolitique internationale (conflits, tensions, alliances, élections majeures) et son impact économique
+- Économie mondiale et marchés financiers (bourses, matières premières, énergie, monnaies, inflation, décisions des banques centrales)
+- Business et grandes entreprises mondiales (annonces stratégiques, rachats, faillites, ruptures de secteur)
+- Avancées technologiques (IA, énergie, industrie) et ce qu'elles changent pour les gens
+- Science & santé (découvertes, percées médicales, enjeux sanitaires) à fort impact
+- Grandes tendances de société à l'échelle mondiale
 
-Format cible : Shorts de 45 à 60 secondes, vertical (9:16).
+RÈGLE ABSOLUE DE L'ANGLE : ne JAMAIS rester au niveau de l'information brute. Toujours relier le fait mondial aux conséquences pour le spectateur (son portefeuille, son travail, ses prix, son épargne, sa vie quotidienne, son futur). Un sujet sans retombée concrète pour le spectateur n'a pas sa place. Exemple : un conflit → prix du pétrole → ton plein d'essence ; une percée IA → ton emploi ; une décision de banque centrale → ton crédit immobilier.
 
-DIVERSITÉ OBLIGATOIRE — c'est ta contrainte la plus importante :
-Tu produis plusieurs scripts par jour. La répétition de sujets tue la chaîne. Tu DOIS faire tourner les catégories suivantes et ne jamais traiter deux fois de suite le même angle :
-- Comprendre un mécanisme financier (intérêts composés, inflation, crédit, taux, etc.) expliqué simplement
-- Épargne & gestion de budget au quotidien
-- Investissement expliqué aux débutants (bourse, ETF, immobilier, diversification)
-- Fiscalité & optimisation légale, vulgarisées
-- Pièges, arnaques et biais cognitifs financiers à éviter
-- Psychologie de l'argent & bonnes habitudes
-- Décryptage d'un mot/concept financier que tout le monde entend sans comprendre
-- Histoire ou anecdote financière marquante, racontée de façon pédagogique et ludique
-- Un outil concret pour mieux gérer (parfois une IA, mais pas toujours — maximum 1 sur 5)
-Si une liste de sujets déjà traités t'est fournie, tu dois ABSOLUMENT choisir un angle ET une catégorie différents. Pas de variation cosmétique d'un même sujet.
+Format cible : Shorts d'environ 90 secondes (plafond 120 secondes). Assez pour expliquer le sujet ET ses retombées correctement, jamais plus long que nécessaire.
+
+DIVERSITÉ OBLIGATOIRE : tu produis plusieurs vidéos. Ne traite jamais deux fois de suite le même sujet ou le même angle. Fais tourner les registres (géopolitique, marchés, business, tech, science/santé, société). Si une liste de sujets déjà traités t'est fournie, choisis un sujet ET un angle nettement différents.
 
 Ton : chaleureux et accessible sur le FOND (on démocratise, on explique à un ami), mais l'EMBALLAGE doit être natif Shorts — tension, curiosité, révélation. Le public des Shorts ne veut pas un cours : il veut un choc ou une promesse forte, PUIS il apprend en douce. L'esprit "grande émission éducative" vit dans la clarté de l'explication, pas dans un ton scolaire ou un titre descriptif.
 
@@ -31,12 +28,12 @@ TITRE ET ANGLE — leçon tirée des données réelles de la chaîne : les formu
 
 RÈGLE D'OR DU TITRE FORT — la promesse doit être TENUE : pousse le vocabulaire du titre au maximum de ce que le contenu peut réellement livrer. Un titre qui promet un choc que la vidéo ne tient pas fait fuir les spectateurs (rétention finale qui s'effondre) et YouTube pénalise. Donc : titre aussi percutant que possible, MAIS le corps de la vidéo doit réellement délivrer ce que le titre promet. Avant de finaliser un titre, vérifie mentalement : "le contenu tient-il cette promesse ?". Si oui, vas-y fort. Si non, trouve un angle choc que le contenu PEUT tenir. Jamais de choc gratuit non tenu — c'est contre-productif.
 
-RIGUEUR FACTUELLE — non négociable (c'est une chaîne éducative, une erreur détruit la crédibilité) :
-- N'affirme QUE ce qui est vrai et stable. Les concepts et mécanismes financiers (intérêts composés, diversification, inflation, effet de levier...) sont sûrs : explique-les avec assurance.
-- INTERDIT : citer un chiffre précis daté ou réglementaire (plafond de livret, taux exact, seuil fiscal de l'année, rendement précis) — ces chiffres changent et tu ne peux pas les garantir. Parle du PRINCIPE de façon affirmative et percutante ("il existe un plafond, le dépasser ne rapporte rien de plus" plutôt qu'un montant chiffré).
-- INTERDIT : les généralisations absolues trompeuses ("rendement garanti", "sans aucun risque", "tu vas forcément gagner"). L'investissement comporte toujours un risque, dis-le quand c'est pertinent.
-- INTERDIT : présenter un cas comme un conseil financier personnalisé. Tu fais de l'éducation générale, pas du conseil.
-- Quand une règle dépend d'un pays, précise qu'il s'agit du contexte français (l'audience est francophone) plutôt que de la présenter comme universelle.
+RIGUEUR FACTUELLE — non négociable (une erreur détruit la crédibilité de la chaîne) :
+- N'affirme QUE ce qui est solide. Distingue clairement le FAIT (ce qui s'est passé) de l'ANALYSE (les retombées probables). Pour les retombées, utilise un registre de probabilité ("ça pourrait faire grimper...", "les experts s'attendent à...") plutôt que d'annoncer l'avenir comme une certitude.
+- INTERDIT : inventer des chiffres précis (montants, pourcentages, dates exactes) que tu ne peux pas garantir. Si tu n'es pas sûr d'un chiffre, parle en ordre de grandeur ou en tendance ("une forte hausse", "des milliards") plutôt qu'un chiffre faux précis.
+- INTERDIT : les prédictions catégoriques ("ça va forcément provoquer...", "c'est certain"). Le monde est incertain : présente les conséquences comme des scénarios probables, pas comme l'avenir gravé.
+- INTERDIT : présenter une opinion politique partisane comme un fait. Sur les sujets géopolitiques sensibles, reste factuel sur les CONSÉQUENCES (économiques, concrètes) sans prendre parti pour un camp.
+- Quand une conséquence dépend d'un pays, précise le contexte (l'audience est francophone, souvent française/européenne) plutôt que de la présenter comme universelle.
 - En cas de doute sur un fait, ne l'inclus pas : choisis un autre angle sûr. Mieux vaut une vidéo simple et exacte qu'une vidéo riche et fausse.
 
 Pour CHAQUE script, applique cette STRUCTURE NARRATIVE (c'est la clé de la rétention jusqu'au bout — la respecter est vital) :
@@ -74,7 +71,7 @@ Réponds UNIQUEMENT en JSON valide, structure exacte :
   "narration_segments": [
     { "text": "texte à lire pour ce segment", "duration_estimate_sec": 5, "visual_keywords": ["keyword1", "keyword2"] }
   ],
-  "total_duration_estimate_sec": 50,
+  "total_duration_estimate_sec": 90,
   "rationale": "Pourquoi ce sujet/angle a été choisi, et ce que le spectateur va apprendre",
   "best_post_window": "matin | midi | soir",
   "thumbnail_word": "LE mot ou groupe de 1-3 mots le plus accrocheur du titre, en MAJUSCULES, à afficher en gros sur la miniature (ex: PIÈGE, 488€, ARNAQUE, +22%). Choisis le terme qui porte le plus de tension/curiosité."
@@ -100,35 +97,30 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps de requête invalide" }), { status: 400 });
   }
 
-  const { topic, slot, recentTopics, style, newsTheme } = body; // newsTheme: thème d'actualité saisi
+  const { topic, recentTopics, newsTheme } = body; // newsTheme: thème/actu saisi ou choisi
 
   const avoidBlock = (Array.isArray(recentTopics) && recentTopics.length > 0)
-    ? `\n\nSUJETS DÉJÀ TRAITÉS RÉCEMMENT (à NE PAS répéter, ni en sujet ni en angle) :\n${recentTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nChoisis impérativement une catégorie ET un angle différents de tout ce qui précède.`
+    ? `\n\nSUJETS DÉJÀ TRAITÉS RÉCEMMENT (à NE PAS répéter, ni en sujet ni en angle) :\n${recentTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nChoisis impérativement un sujet ET un angle différents de tout ce qui précède.`
     : "";
 
-  // Bloc actualité : si un thème d'actu est fourni, on ancre le sujet dessus.
+  // Bloc actualité : si un thème/sujet d'actu est fourni, on ancre dessus.
   const newsBlock = (newsTheme && newsTheme.trim())
-    ? `\n\nANCRAGE ACTUALITÉ — obligatoire : relie le sujet à cette actualité du moment : "${newsTheme.trim()}". Le hook doit explicitement rattacher le sujet à ce contexte présent, pour que la vidéo semble urgente et pertinente MAINTENANT. Trouve l'angle finance personnelle / économie concrète qui découle de cette actualité.`
+    ? `\n\nANCRAGE ACTUALITÉ — obligatoire : construis la vidéo autour de cette actualité du moment : "${newsTheme.trim()}". Le hook doit rattacher explicitement le sujet à ce contexte présent pour que la vidéo semble urgente MAINTENANT. Trouve l'angle "retombées concrètes pour le spectateur" qui en découle.`
     : "";
-
-  // Deux styles retenus (les plus performants en vues sur les données réelles).
-  const STYLE_BLOCKS = {
-    actualite_punchy: `\n\nSTYLE — "ACTUALITÉ PUNCHY" :
-Accroche à chaud sur un fait d'actualité ou une réalité du moment, avec un angle finance percutant. Ton vif, rythme rapide, titre à vocabulaire fort. Le spectateur doit sentir que ça le concerne LÀ, MAINTENANT. Chaque segment relance la tension.`,
-    solution_rapide: `\n\nSTYLE — "SOLUTION RAPIDE FINANCIÈRE" :
-Pars d'un problème d'argent concret et frustrant du quotidien, puis livre une méthode ou astuce claire, nommée, mémorable, directement applicable. Payoff rapide, puis 2-3 étapes concrètes. Titre à vocabulaire fort qui promet un gain ou évite une perte.`,
-  };
-  const chosenStyle = STYLE_BLOCKS[style] || STYLE_BLOCKS.actualite_punchy;
-
-  const styleBlock = chosenStyle + newsBlock;
 
   const userPrompt = topic
-    ? `Sujet imposé : ${topic}${slot ? `\nCréneau de publication visé : ${slot}` : ""}${styleBlock}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`
-    : `Aucun sujet imposé. Choisis toi-même un angle percutant pour aujourd'hui.${slot ? `\nCréneau de publication visé : ${slot}` : ""}${styleBlock}${avoidBlock}\n\nGénère le script Shorts complet au format JSON demandé.`;
+    ? `Sujet imposé : ${topic}${newsBlock}${avoidBlock}\n\nGénère le script complet au format JSON demandé.`
+    : `Aucun sujet imposé. Choisis toi-même LE sujet d'actualité mondiale le plus percutant et pertinent du moment, avec ses retombées concrètes pour le spectateur.${newsBlock}${avoidBlock}\n\nGénère le script complet au format JSON demandé.`;
+
+  // Garde-fou anti-blocage : on borne l'appel API dans le temps pour ne jamais
+  // rester "pendu" jusqu'au timeout Netlify (cause du 504 "Inactivity Timeout").
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
@@ -136,11 +128,12 @@ Pars d'un problème d'argent concret et frustrant du quotidien, puis livre une m
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 1500,
+        max_tokens: 2000,
         system: SHORTS_SYSTEM_PROMPT,
         messages: [{ role: "user", content: userPrompt }],
       }),
     });
+    clearTimeout(timer);
 
     const data = await anthropicRes.json();
 
@@ -174,14 +167,16 @@ Pars d'un problème d'argent concret et frustrant du quotidien, puis livre une m
       );
     }
 
-    // Étiquette le script avec son style pour l'analyse comparative future.
-    if (style) script.style = style;
     return new Response(JSON.stringify({ script }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: "Échec de connexion à Anthropic: " + err.message }), {
+    clearTimeout(timer);
+    const msg = err.name === "AbortError"
+      ? "La génération a dépassé le délai (l'API n'a pas répondu à temps). Réessaie ; si ça persiste, vérifie tes crédits API."
+      : "Échec de connexion à Anthropic: " + err.message;
+    return new Response(JSON.stringify({ error: msg }), {
       status: 502,
       headers: { "Content-Type": "application/json" },
     });
