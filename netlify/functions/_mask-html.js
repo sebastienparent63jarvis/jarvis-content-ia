@@ -39,8 +39,8 @@ export function maskHtml({ title, category, hookWord, bgUrl }) {
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     *{margin:0;padding:0;box-sizing:border-box;}
-    html,body{width:1080px;height:1920px;overflow:hidden;font-family:'Inter',sans-serif;}
-    .frame{position:relative;width:1080px;height:1920px;${bgUrl ? "" : "background:transparent;"}}
+    html,body{width:1080px;height:1920px;overflow:hidden;font-family:'Inter',sans-serif;background:${bgUrl ? "#000" : "transparent"} !important;}
+    .frame{position:relative;width:1080px;height:1920px;background:${bgUrl ? "#000" : "transparent"};}
     .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
     .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,14,22,0.42) 0%,rgba(10,14,22,0) 26%,rgba(10,14,22,0) 52%,rgba(10,14,22,0.96) 100%);}
     .badge{position:absolute;top:54px;left:54px;display:flex;align-items:center;}
@@ -91,7 +91,10 @@ export async function renderViaHcti(html, { transparent = false } = {}) {
     viewport_height: 1920,
     device_scale: 1,
   };
-  if (transparent) payload.selector = ".frame";
+  // Pour l'intro : fond transparent (le masque se superpose à la vidéo).
+  // HCTI produit un PNG transparent quand la page a un fond transparent ; on ne
+  // fixe PAS de selector (qui recadrerait) pour garder tout le cadre 1080x1920.
+  if (transparent) payload.transparent = true;
 
   const res = await fetch("https://hcti.io/v1/image", {
     method: "POST",

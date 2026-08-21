@@ -56,57 +56,72 @@ export default async (req, context) => {
   const clipByIndex = {};
   (clips || []).forEach((c) => { if (c.clip && c.clip.link) clipByIndex[c.segment_index] = c.clip.link; });
 
+  const INTRO_DUR = 3;   // durée de l'intro (masque) — le contenu commence après
+  const hookWord = (word || "").toString().trim();
+
+  // Échappe une regex et colore le mot-clé de référence dans un sous-titre,
+  // AVEC parcimonie (seulement le hookWord), pour matcher le titre du masque.
+  const colorizeCaption = (text) => {
+    const safe = escapeHtml(text);
+    if (!hookWord) return safe;
+    const hw = hookWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    try {
+      return safe.replace(new RegExp("(" + escapeHtml(hookWord).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "i"),
+        '<span style="color:#b085d0">$1</span>');
+    } catch { return safe; }
+  };
+
   let cursor = 0;
   const videoClips = [];
   const captionClips = [];
   const audioClips = [];
 
+  // Fond vidéo pendant l'intro (0→INTRO_DUR) : le premier clip, muet, pour que
+  // le masque ne soit pas sur du noir. Le masque se superpose par-dessus.
+  const firstLink = clipByIndex[0];
+  if (firstLink) {
+    videoClips.push({
+      asset: { type: "video", src: firstLink, volume: 0 },
+      start: 0, length: INTRO_DUR, fit: "cover", effect: "zoomIn",
+    });
+  }
+
   segments.forEach((seg, i) => {
-    // Durée RÉELLE si on l'a mesurée, sinon estimation (avec marge de 0.15s
-    // de respiration entre segments pour un rendu naturel).
     const real = realByIndex[i];
     const dur = real && real.duration
       ? real.duration + 0.15
       : Math.max(2, seg.duration_estimate_sec || 5);
     const videoLink = clipByIndex[i];
+    // Tout le contenu est décalé APRÈS l'intro pour ne jamais chevaucher le masque.
+    const at = cursor + INTRO_DUR;
 
-    // Place l'audio du segment exactement sur sa tranche.
     if (real && real.url) {
-      audioClips.push({
-        asset: { type: "audio", src: real.url },
-        start: cursor,
-        length: dur,
-      });
+      audioClips.push({ asset: { type: "audio", src: real.url }, start: at, length: dur });
     }
 
     if (videoLink) {
       videoClips.push({
         asset: { type: "video", src: videoLink, volume: 0 },
-        start: cursor,
-        length: dur,
-        fit: "cover",
-        // Léger zoom progressif pour donner du mouvement (effet Ken Burns).
-        effect: "zoomIn",
+        start: at, length: dur, fit: "cover", effect: "zoomIn",
       });
     } else {
-      // Pas de clip : fond uni sombre de secours.
       videoClips.push({
         asset: { type: "html", html: "<div></div>", background: "#0D1321", width: 1080, height: 1920 },
-        start: cursor,
-        length: dur,
+        start: at, length: dur,
       });
     }
 
-    // Sous-titre : cartouche foncé semi-transparent + texte blanc pur,
-    // calé EXACTEMENT sur la durée réelle de la narration du segment.
+    // Sous-titre : même identité que le titre du masque (Inter 900, blanc, mot-clé
+    // en violet clair), sur un cartouche sombre discret pour rester lisible sur la
+    // vidéo. Calé EXACTEMENT sur la durée réelle du segment audio.
     captionClips.push({
       asset: {
         type: "html",
-        html: `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><p style="font-family:'Open Sans',sans-serif;color:#ffffff;font-size:52px;font-weight:800;text-align:center;line-height:1.35;margin:0;padding:28px 36px;background:rgba(8,12,20,0.78);border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.5);">${escapeHtml(seg.text)}</p></div>`,
+        html: `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><p style="font-family:'Inter','Open Sans',sans-serif;color:#ffffff;font-size:54px;font-weight:900;letter-spacing:-0.02em;text-align:center;line-height:1.2;margin:0;padding:26px 34px;background:rgba(8,12,20,0.72);border-radius:18px;">${colorizeCaption(seg.text)}</p></div>`,
         width: 1000,
         height: 700,
       },
-      start: cursor,
+      start: at,
       length: dur,
       position: "bottom",
       offset: { y: 0.10 },
@@ -116,21 +131,17 @@ export default async (req, context) => {
     cursor += dur;
   });
 
-  const totalDuration = cursor;
+  const contentDuration = cursor;
+  const totalDuration = INTRO_DUR + contentDuration; // intro + contenu
 
-  // ---- INTRO : masque de marque (image PNG pixel-parfaite) sur 3s ----
-  // Images de marque déjà générées en amont (generate-brand-images, isolé).
-  // assemble-video reste léger : aucune génération d'image ici, donc pas de
-  // module natif ni de calcul lourd → plus de 502.
-  const INTRO_DUR = 3;
-
+  // ---- INTRO : masque de marque (image PNG transparente) sur 0→INTRO_DUR ----
   const introClips = introMaskUrl ? [{
     asset: { type: "image", src: introMaskUrl },
     start: 0, length: INTRO_DUR,
     transition: { in: "fade", out: "slideRight" },
   }] : [];
 
-  // ---- OUTRO : écran de fin (image PNG pixel-parfaite) après le contenu ----
+  // ---- OUTRO : écran de fin après le contenu ----
   const OUTRO_DUR = 2.5;
   const outroClips = outroImgUrl ? [{
     asset: { type: "image", src: outroImgUrl },
@@ -141,17 +152,21 @@ export default async (req, context) => {
 
   const grandTotal = totalDuration + OUTRO_DUR;
 
-  // Piste audio : soit les segments calés (mode réel), soit l'audio global (fallback).
+  // Piste audio : segments calés (mode réel, décalés après l'intro) ou bloc unique.
   const audioTrack = hasRealAudio
     ? { clips: audioClips }
-    : { clips: [{ asset: { type: "audio", src: audioUrl }, start: 0, length: totalDuration }] };
+    : { clips: [{ asset: { type: "audio", src: audioUrl }, start: INTRO_DUR, length: contentDuration }] };
 
   const timeline = {
     background: "#000000",
+    // Police Inter déclarée pour que les sous-titres matchent le titre du masque.
+    fonts: [
+      { src: "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf" },
+    ],
     tracks: [
-      { clips: introClips },     // masque d'intro (image PNG, 3s, balayage sortie)
-      { clips: outroClips },     // écran de fin (image PNG)
-      { clips: captionClips },   // sous-titres
+      { clips: introClips },     // masque d'intro (image transparente, 3s)
+      { clips: outroClips },     // écran de fin
+      { clips: captionClips },   // sous-titres (après l'intro, synchro réelle)
       { clips: videoClips },     // vidéo de fond
       audioTrack,                // voix off
     ],

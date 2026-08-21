@@ -234,6 +234,7 @@ export default function JarvisApp() {
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioUrlHosted, setAudioUrlHosted] = useState(null); // URL publique pour Shotstack
+  const [audioSegmentsHosted, setAudioSegmentsHosted] = useState(null); // [{index,url,duration}] pour synchro exacte
   const [copiedField, setCopiedField] = useState(null); // fiche de publication
   const [markedPublished, setMarkedPublished] = useState(false);
   const [audioError, setAudioError] = useState(null);
@@ -290,6 +291,7 @@ export default function JarvisApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           audioUrl: audioUrlHosted,
+          audioSegments: audioSegmentsHosted || undefined,
           segments: pipelineScript.narration_segments || [],
           clips: visuals.clips || [],
           title: pipelineScript.title,
@@ -463,49 +465,67 @@ export default function JarvisApp() {
   };
 
 
-  // Pipeline Shorts (Phase 2 — voix off)
+  // Pipeline Shorts (Phase 2 — voix off, SEGMENT PAR SEGMENT pour une synchro exacte)
   const handleGenerateAudio = async () => {
     if (!pipelineScript) return;
     setAudioLoading(true);
     setAudioUrl(null);
     setAudioUrlHosted(null);
+    setAudioSegmentsHosted(null);
     setAudioError(null);
-    const fullText = (pipelineScript.narration_segments || []).map(s => s.text).join(" ");
+    const segs = pipelineScript.narration_segments || [];
     try {
-      const res = await fetch("/api/generate-audio", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: fullText, voiceId: voiceId.trim() || undefined }),
-      });
-      const raw = await res.text();
-      let data;
-      try { data = JSON.parse(raw); } catch { throw new Error("Réponse inattendue (délai dépassé ?)"); }
-      if (!res.ok) throw new Error(data.error || "Erreur inconnue");
-      const url = `data:${data.mime};base64,${data.audio_base64}`;
-      setAudioUrl(url);
+      // Décode la durée réelle d'un MP3 base64 via l'AudioContext du navigateur.
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const measureDuration = async (base64) => {
+        const bin = atob(base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const decoded = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+        return decoded.duration;
+      };
 
-      // Héberge l'audio dans Netlify Blobs pour obtenir une URL publique
-      // (nécessaire pour l'assemblage Shotstack en Phase 4).
-      try {
+      const hostedSegments = [];
+      let totalChars = 0;
+      for (let i = 0; i < segs.length; i++) {
+        setAudioError(null);
+        // 1. Génère la voix de CE segment
+        const res = await fetch("/api/generate-audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: segs[i].text, voiceId: voiceId.trim() || undefined }),
+        });
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw); } catch { throw new Error(`Segment ${i + 1} : réponse audio invalide`); }
+        if (!res.ok) throw new Error(`Segment ${i + 1} : ${data.error || "erreur voix off"}`);
+        totalChars += data.chars_used || segs[i].text.length;
+
+        // 2. Mesure sa durée RÉELLE
+        let duration = 5;
+        try { duration = await measureDuration(data.audio_base64); } catch { /* garde le défaut */ }
+
+        // 3. Héberge ce segment pour Shotstack
         const hostRes = await fetch("/api/store-audio", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ audio_base64: data.audio_base64 }),
         });
         const hostData = await hostRes.json();
-        if (hostRes.ok && hostData.url) {
-          setAudioUrlHosted(hostData.url);
-        } else {
-          setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + (hostData.error || "erreur inconnue") + " — la Phase 4 restera bloquée tant que ce n'est pas résolu.");
-        }
-      } catch (hostErr) {
-        setAudioError("Voix off OK, mais hébergement pour la vidéo échoué : " + hostErr.message);
+        if (!hostRes.ok || !hostData.url) throw new Error(`Segment ${i + 1} : hébergement audio échoué (${hostData.error || "?"})`);
+
+        hostedSegments.push({ index: i, url: hostData.url, duration });
+        // Le premier segment sert d'aperçu écoutable.
+        if (i === 0) setAudioUrl(`data:${data.mime};base64,${data.audio_base64}`);
       }
+
+      setAudioSegmentsHosted(hostedSegments);
+      setAudioUrlHosted(hostedSegments[0]?.url || null); // compat (présence = prêt)
 
       addToLog({
         type: "VOIX OFF",
-        decision: `Audio généré pour "${pipelineScript.title}"`,
-        rationale: `${data.chars_used} caractères ElevenLabs consommés`,
+        decision: `Voix off générée (${hostedSegments.length} segments synchronisés)`,
+        rationale: `${totalChars} caractères ElevenLabs · durées réelles mesurées`,
         kpi: "Phase 2 ✓",
       });
     } catch (e) {
