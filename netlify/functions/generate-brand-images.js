@@ -14,14 +14,16 @@ export default async (req, context) => {
     return new Response(JSON.stringify({ error: "Corps invalide" }), { status: 400 });
   }
 
-  const { title, category, word } = body;
+  const { title, category, word, bgImage } = body;
 
   try {
     let introMaskUrl = null;
     if (title) {
-      // Masque transparent (sans fond) pour superposer sur la vidéo.
-      const html = maskHtml({ title, category, hookWord: word, bgUrl: null });
-      introMaskUrl = await renderViaHcti(html, { transparent: true });
+      // Intro = masque incrusté SUR la première image Pexels (opaque, comme la
+      // miniature). Plus de problème de transparence : l'intro est une image
+      // pleine qui s'affiche puis balaie pour révéler la vidéo.
+      const html = maskHtml({ title, category, hookWord: word, bgUrl: bgImage || null });
+      introMaskUrl = await renderViaHcti(html);
     }
     const outroImgUrl = await renderViaHcti(outroHtml());
 

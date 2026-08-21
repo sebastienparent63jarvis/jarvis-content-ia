@@ -76,15 +76,8 @@ export default async (req, context) => {
   const captionClips = [];
   const audioClips = [];
 
-  // Fond vidéo pendant l'intro (0→INTRO_DUR) : le premier clip, muet, pour que
-  // le masque ne soit pas sur du noir. Le masque se superpose par-dessus.
-  const firstLink = clipByIndex[0];
-  if (firstLink) {
-    videoClips.push({
-      asset: { type: "video", src: firstLink, volume: 0 },
-      start: 0, length: INTRO_DUR, fit: "cover", effect: "zoomIn",
-    });
-  }
+  // (L'intro est une image opaque plein cadre 0→INTRO_DUR : pas besoin de fond
+  // vidéo sous elle.)
 
   segments.forEach((seg, i) => {
     const real = realByIndex[i];
@@ -111,20 +104,20 @@ export default async (req, context) => {
       });
     }
 
-    // Sous-titre : même identité que le titre du masque (Inter 900, blanc, mot-clé
-    // en violet clair), sur un cartouche sombre discret pour rester lisible sur la
-    // vidéo. Calé EXACTEMENT sur la durée réelle du segment audio.
+    // Sous-titre : MÊME identité que le titre du masque — Inter 900 blanc, mot-clé
+    // en violet clair, SANS cartouche. Lisibilité assurée par une ombre portée
+    // sombre (halo) plutôt qu'un rectangle noir. Calé sur la durée réelle du segment.
     captionClips.push({
       asset: {
         type: "html",
-        html: `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><p style="font-family:'Inter','Open Sans',sans-serif;color:#ffffff;font-size:54px;font-weight:900;letter-spacing:-0.02em;text-align:center;line-height:1.2;margin:0;padding:26px 34px;background:rgba(8,12,20,0.72);border-radius:18px;">${colorizeCaption(seg.text)}</p></div>`,
+        html: `<div style="display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%;"><p style="font-family:'Inter','Open Sans',sans-serif;color:#ffffff;font-size:58px;font-weight:900;letter-spacing:-0.02em;text-align:center;line-height:1.1;margin:0;padding:0 40px;text-shadow:0 3px 12px rgba(0,0,0,0.95), 0 1px 3px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.8);">${colorizeCaption(seg.text)}</p></div>`,
         width: 1000,
-        height: 700,
+        height: 620,
       },
       start: at,
       length: dur,
       position: "bottom",
-      offset: { y: 0.10 },
+      offset: { y: 0.12 },
       transition: { in: "fade", out: "fade" },
     });
 

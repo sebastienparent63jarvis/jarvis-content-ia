@@ -265,9 +265,11 @@ export default function JarvisApp() {
     setVideoError(null);
     setVideoStatus("Génération du masque de marque (intro + fin)…");
     try {
-      // 0. Génère les images de marque dans une fonction isolée (resvg).
-      //    Si ça échoue, on assemble quand même la vidéo SANS intro/outro.
+      // 0. Génère les images de marque dans une fonction isolée (HCTI).
+      //    L'intro = masque incrusté sur la 1re image Pexels. Si ça échoue, on
+      //    assemble quand même la vidéo SANS intro/outro.
       let introMaskUrl = null, outroImgUrl = null;
+      const firstPreview = (visuals && visuals.clips || []).find(c => c.clip && c.clip.preview);
       try {
         const bRes = await fetch("/api/generate-brand-images", {
           method: "POST",
@@ -276,6 +278,7 @@ export default function JarvisApp() {
             title: pipelineScript.title,
             category: pipelineScript.category,
             word: pipelineScript.thumbnail_word,
+            bgImage: firstPreview ? firstPreview.clip.preview : undefined,
           }),
         });
         const bRaw = await bRes.text();

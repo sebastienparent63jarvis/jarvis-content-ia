@@ -19,12 +19,39 @@ function esc(s) {
 // fond (miniature) ; sinon fond transparent (intro vidéo superposée).
 export function maskHtml({ title, category, hookWord, bgUrl }) {
   const B = BRAND;
-  let head = esc(title || "");
-  if (hookWord) {
-    const hw = esc(hookWord);
-    const re = new RegExp("(" + hw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "i");
-    head = head.replace(re, `<b style="color:${B.purpleLight}">$1</b>`);
+  const rawTitle = (title || "").toString();
+  let head = esc(rawTitle);
+
+  // Colorise UN mot-clé de référence en violet clair. On tente dans l'ordre :
+  // 1) le hookWord fourni s'il apparaît dans le titre ; 2) un nombre/montant
+  // (ex "100$", "3,5%", "40") ; 3) le mot le plus long du titre (>4 lettres).
+  // Ainsi la colorisation marche même si le thumbnail_word n'est pas dans le titre.
+  const colorOne = (pattern) => {
+    try {
+      const re = new RegExp("(" + pattern + ")", "i");
+      if (re.test(head)) { head = head.replace(re, `<b>$1</b>`); return true; }
+    } catch { /* ignore */ }
+    return false;
+  };
+  const escRe = (s) => esc(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  let done = false;
+  if (hookWord && hookWord.toString().trim()) {
+    done = colorOne(escRe(hookWord.toString().trim()));
   }
+  if (!done) {
+    // nombre éventuellement suivi de € $ % ou précédé, ex "100$", "3,5 %", "12 €"
+    done = colorOne("\\d[\\d\\s.,]*\\s?(?:%|€|\\$|euros?)?");
+  }
+  if (!done) {
+    // mot le plus long du titre (hors petits mots)
+    const words = rawTitle.split(/\s+/).filter(w => w.replace(/[^\wÀ-ÿ]/g, "").length > 4);
+    if (words.length) {
+      const longest = words.sort((a, b) => b.length - a.length)[0];
+      colorOne(escRe(longest));
+    }
+  }
+
   let catLabel = (category || "").toString().trim();
   if (catLabel.length > 30) catLabel = catLabel.slice(0, 30).replace(/[\s,(]+\S*$/, "") + "…";
   const catHtml = catLabel
