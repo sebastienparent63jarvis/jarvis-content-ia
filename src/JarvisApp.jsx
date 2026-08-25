@@ -148,6 +148,7 @@ export default function JarvisApp() {
 
   // Pipeline Shorts (Phase 1)
   const [pipelineNews, setPipelineNews] = useState(""); // thème d'actualité optionnel
+  const [newsAngle, setNewsAngle] = useState(""); // angle éditorial imposé (vide = tous angles)
   const [newsTopics, setNewsTopics] = useState(null); // sujets d'actu proposés
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState(null);
@@ -162,7 +163,7 @@ export default function JarvisApp() {
       await fetch("/.netlify/functions/fetch-news-background", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, hint: pipelineNews.trim() || undefined }),
+        body: JSON.stringify({ jobId, hint: pipelineNews.trim() || undefined, angle: newsAngle || undefined }),
       });
 
       // 2. Poll le résultat jusqu'à done/error (max ~60s).
@@ -779,13 +780,34 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 <input
                   value={pipelineNews}
                   onChange={e => setPipelineNews(e.target.value)}
-                  placeholder="Optionnel : oriente la recherche (ex: énergie, immobilier, Iran…)"
+                  placeholder="Optionnel : sujet imposé (ex: tornade dans l'Aude, sanctions Iran…)"
                   style={{
                     width: "100%", background: T.glassSolid, border: `1px solid ${T.border}`,
                     borderRadius: 8, padding: "10px 14px", color: T.text, fontSize: 13,
                     fontFamily: T.sans, boxSizing: "border-box", outline: "none", marginBottom: 10,
                   }}
                 />
+                {/* SÉLECTEUR D'ANGLE ÉDITORIAL */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Angle imposé</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {[
+                      { id: "", label: "Tous angles" },
+                      { id: "finance", label: "💰 Finance" },
+                      { id: "environnement", label: "🌍 Environnement" },
+                      { id: "geopolitique", label: "⚔️ Géopolitique" },
+                      { id: "tech", label: "🔬 Tech/Science/Santé" },
+                    ].map(a => (
+                      <button key={a.id} onClick={() => setNewsAngle(a.id)} style={{
+                        padding: "7px 12px",
+                        background: newsAngle === a.id ? `linear-gradient(90deg, ${T.accentGlow}, ${T.accentDim})` : T.glassSolid,
+                        color: newsAngle === a.id ? "#fff" : T.muted,
+                        border: `1px solid ${newsAngle === a.id ? T.accent : T.border}`,
+                        borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: newsAngle === a.id ? 700 : 500,
+                      }}>{a.label}</button>
+                    ))}
+                  </div>
+                </div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button
                     onClick={() => fetchNews(false)}

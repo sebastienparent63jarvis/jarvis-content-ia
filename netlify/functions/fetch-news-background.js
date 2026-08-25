@@ -49,7 +49,22 @@ export default async (req, context) => {
   try { body = await req.json(); } catch { body = {}; }
 
   const jobId = body.jobId;
-  const hint = body.hint ? `\n\nOriente la recherche autour de : ${body.hint}` : "";
+
+  // Mots-clés de l'utilisateur : CONTRAIGNANTS (le sujet DOIT porter dessus).
+  const hint = body.hint && body.hint.trim()
+    ? `\n\nCONTRAINTE FORTE — SUJET IMPOSÉ : tous les sujets proposés doivent porter DIRECTEMENT sur : "${body.hint.trim()}". C'est le cœur de la demande, pas une simple orientation. Si tu proposes des sujets connexes, ils doivent rester clairement rattachés à ce thème. N'ignore JAMAIS cette contrainte.`
+    : "";
+
+  // Angle éditorial imposé (choisi par l'utilisateur dans l'interface).
+  const ANGLES = {
+    finance: "l'impact FINANCIER concret (prix, pouvoir d'achat, épargne, factures, coûts)",
+    environnement: "l'angle ENVIRONNEMENT / CLIMAT et ses effets concrets sur la vie des gens",
+    geopolitique: "l'angle GÉOPOLITIQUE / CONFLITS et ce que ça implique pour le spectateur",
+    tech: "l'angle TECH / SCIENCE / SANTÉ et ce que ça change concrètement",
+  };
+  const angleBlock = (body.angle && ANGLES[body.angle])
+    ? `\n\nANGLE IMPOSÉ : TOUS les sujets doivent être traités sous ${ANGLES[body.angle]}. C'est l'angle exigé par l'utilisateur — applique-le à chaque sujet sans exception.`
+    : "";
 
   if (!jobId) {
     return new Response(JSON.stringify({ error: "jobId manquant" }), { status: 400 });
@@ -81,7 +96,7 @@ export default async (req, context) => {
           model: "claude-sonnet-4-6",
           max_tokens: 1500,
           system: NEWS_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: `Quels sont les sujets d'actualité récents les plus exploitables aujourd'hui pour un Short finance percutant ?${hint}` }],
+          messages: [{ role: "user", content: `Quels sont les sujets d'actualité récents les plus intéressants et exploitables aujourd'hui pour une vidéo Actu Crue ?${hint}${angleBlock}` }],
           tools: [{ type: "web_search_20250305", name: "web_search" }],
         }),
       });
