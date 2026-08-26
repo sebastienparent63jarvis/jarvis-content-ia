@@ -242,6 +242,7 @@ export default function JarvisApp() {
   const [voiceId, setVoiceId] = useState(""); // vide = la voix de Netlify (ELEVENLABS_VOICE_ID) fait autorité
   const [ytConnected, setYtConnected] = useState(null); // null=inconnu, true/false
   const [ytReason, setYtReason] = useState(null);
+  const [ytChannel, setYtChannel] = useState(null); // {id, title} chaîne liée
   const [ytChecking, setYtChecking] = useState(false);
   const [voiceIdInput, setVoiceIdInput] = useState("");
   const [voiceSaved, setVoiceSaved] = useState(false);
@@ -546,21 +547,32 @@ export default function JarvisApp() {
       const videoId = upData.id;
 
       // 6. Applique la miniature (si générée)
+      let thumbWarning = null;
       if (thumbUrl && videoId) {
         try {
           setYtUploadStatus("Application de la miniature…");
           const thumbResp = await fetch(thumbUrl);
           const thumbBlob = await thumbResp.blob();
-          await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`, {
+          const thumbSet = await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "image/png" },
             body: thumbBlob,
           });
-        } catch { /* la miniature custom peut échouer si chaîne non vérifiée — non bloquant */ }
+          if (!thumbSet.ok) {
+            const te = await thumbSet.json().catch(() => ({}));
+            const msg = te.error?.message || "";
+            thumbWarning = /verif/i.test(msg) || thumbSet.status === 403
+              ? "La vidéo est publiée, mais la miniature n'a pas pu être appliquée : ta chaîne doit être VÉRIFIÉE par téléphone pour utiliser des miniatures personnalisées (youtube.com/verify). Tu peux l'ajouter à la main en attendant."
+              : "La vidéo est publiée, mais la miniature a échoué : " + (msg || `HTTP ${thumbSet.status}`);
+          }
+        } catch (te) {
+          thumbWarning = "La vidéo est publiée, mais la miniature n'a pas pu être envoyée : " + te.message;
+        }
       }
 
       setYtPublishedId(videoId);
       setYtUploadStatus(null);
+      if (thumbWarning) setYtUploadError(thumbWarning);
       addToLog({
         type: "PUBLICATION YOUTUBE",
         decision: `Uploadée (privée) : "${pipelineScript.title}"`,
@@ -582,6 +594,7 @@ export default function JarvisApp() {
       const d = await r.json();
       setYtConnected(!!d.connected);
       setYtReason(d.reason || null);
+      setYtChannel(d.channel || null);
     } catch {
       setYtConnected(false); setYtReason("error");
     }
@@ -1684,6 +1697,24 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                     fontSize: 10, fontFamily: T.mono, color: T.muted,
                   }}>Rafraîchir</button>
                 </div>
+
+                {/* Chaîne liée — pour vérifier qu'on publie bien sur Actu Crue */}
+                {ytConnected && ytChannel && (
+                  <div style={{
+                    marginBottom: 16, padding: 10, borderRadius: 8,
+                    background: /actu\s*crue/i.test(ytChannel.title) ? `${T.green}12` : `${T.red}14`,
+                    border: `1px solid ${/actu\s*crue/i.test(ytChannel.title) ? T.green : T.red}55`,
+                  }}>
+                    <div style={{ fontSize: 12, color: T.text }}>
+                      Chaîne liée : <strong style={{ color: /actu\s*crue/i.test(ytChannel.title) ? T.green : T.red }}>{ytChannel.title}</strong>
+                    </div>
+                    {!/actu\s*crue/i.test(ytChannel.title) && (
+                      <div style={{ fontSize: 11, color: T.muted, marginTop: 6, lineHeight: 1.6 }}>
+                        ⚠️ Ce n'est PAS Actu Crue. Clique "Reconnecter", puis sur l'écran Google <strong style={{ color: T.text }}>choisis bien la chaîne Actu Crue</strong> (pas ta chaîne personnelle).
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <a href="/api/youtube-connect" style={{
                   display: "inline-block", padding: "11px 22px",

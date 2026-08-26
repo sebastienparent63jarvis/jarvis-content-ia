@@ -1,7 +1,7 @@
 // Indique à l'app si YouTube est connecté et si le jeton est encore valide.
 // Sert à afficher "Connecté ✓" ou "À reconnecter" (expiration 7 jours en test).
 
-import { getAccessToken, hasOAuthConfig } from "./_youtube-oauth.js";
+import { getAccessToken, getMyChannel, hasOAuthConfig } from "./_youtube-oauth.js";
 
 export default async (req, context) => {
   if (!hasOAuthConfig()) {
@@ -10,8 +10,10 @@ export default async (req, context) => {
     });
   }
   try {
-    await getAccessToken(); // tente un rafraîchissement réel
-    return new Response(JSON.stringify({ connected: true }), {
+    const accessToken = await getAccessToken(); // tente un rafraîchissement réel
+    let channel = null;
+    try { channel = await getMyChannel(accessToken); } catch { /* non bloquant */ }
+    return new Response(JSON.stringify({ connected: true, channel }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (e) {

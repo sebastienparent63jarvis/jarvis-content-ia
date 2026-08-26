@@ -91,3 +91,17 @@ export async function getAccessToken() {
 export function hasOAuthConfig() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
+
+// Récupère la chaîne à laquelle le jeton est LIÉ (nom + id). Sert à vérifier
+// qu'on publie bien sur Actu Crue et non sur la chaîne personnelle par défaut.
+export async function getMyChannel(accessToken) {
+  const res = await fetch(
+    "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+    { headers: { "Authorization": `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || "Impossible de lire la chaîne");
+  const ch = (data.items || [])[0];
+  if (!ch) return null;
+  return { id: ch.id, title: ch.snippet?.title || "(sans nom)" };
+}
