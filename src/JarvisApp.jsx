@@ -240,6 +240,9 @@ export default function JarvisApp() {
   const [markedPublished, setMarkedPublished] = useState(false);
   const [audioError, setAudioError] = useState(null);
   const [voiceId, setVoiceId] = useState(""); // vide = la voix de Netlify (ELEVENLABS_VOICE_ID) fait autorité
+  const [ytConnected, setYtConnected] = useState(null); // null=inconnu, true/false
+  const [ytReason, setYtReason] = useState(null);
+  const [ytChecking, setYtChecking] = useState(false);
   const [voiceIdInput, setVoiceIdInput] = useState("");
   const [voiceSaved, setVoiceSaved] = useState(false);
 
@@ -469,6 +472,20 @@ export default function JarvisApp() {
   };
 
 
+  // Vérifie l'état de connexion YouTube (OAuth).
+  const checkYouTube = async () => {
+    setYtChecking(true);
+    try {
+      const r = await fetch("/api/youtube-status");
+      const d = await r.json();
+      setYtConnected(!!d.connected);
+      setYtReason(d.reason || null);
+    } catch {
+      setYtConnected(false); setYtReason("error");
+    }
+    setYtChecking(false);
+  };
+
   // Pipeline Shorts (Phase 2 — voix off, SEGMENT PAR SEGMENT pour une synchro exacte)
   const handleGenerateAudio = async () => {
     if (!pipelineScript) return;
@@ -543,6 +560,10 @@ export default function JarvisApp() {
   useEffect(() => {
     if (log.length > 0) { setPulse(true); setTimeout(() => setPulse(false), 600); }
   }, [log.length]);
+
+  useEffect(() => {
+    if (view === "settings" && ytConnected === null) checkYouTube();
+  }, [view]);
 
   const addToLog = (entry) => {
     setLog(prev => [{ id: uid(), time: now(), ...entry }, ...prev]);
@@ -1473,46 +1494,48 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 </div>
               </div>
 
-              {/* YOUTUBE API SECTION */}
+              {/* YOUTUBE CONNEXION (OAuth) */}
               <div style={{ background: T.glassSolid, border: `1px solid ${T.border}`, borderRadius: 10, padding: 24, marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                  ◈ YouTube Data API v3 (optionnel)
+                  ◈ Publication YouTube (connexion)
                 </div>
-                <div style={{
-                  background: `${T.blue}11`, border: `1px solid ${T.blue}33`,
-                  borderRadius: 8, padding: 14, marginBottom: 16, fontSize: 12, color: T.text, lineHeight: 1.8,
+                <p style={{ fontSize: 12, color: T.muted, marginBottom: 16, lineHeight: 1.7 }}>
+                  Relie ta chaîne pour publier depuis Actu Crue. La vidéo sera envoyée en privé + planifiée (tu la passes en public dans Studio tant que l'app n'est pas validée par Google).
+                </p>
+
+                {/* État de connexion */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%",
+                    background: ytChecking ? T.muted : ytConnected ? T.green : (ytReason === "expired" ? T.blue : T.red),
+                    boxShadow: ytConnected ? `0 0 8px ${T.green}` : "none" }} />
+                  <span style={{ fontSize: 12, fontFamily: T.mono, color: ytChecking ? T.muted : ytConnected ? T.green : (ytReason === "expired" ? T.blue : T.red) }}>
+                    {ytChecking ? "Vérification…"
+                      : ytConnected ? "YouTube connecté ✓"
+                      : ytReason === "expired" ? "Connexion expirée (à renouveler)"
+                      : ytReason === "no_config" ? "OAuth non configuré sur Netlify"
+                      : "Non connecté"}
+                  </span>
+                  <button onClick={checkYouTube} style={{
+                    marginLeft: "auto", padding: "4px 10px", background: "transparent",
+                    border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer",
+                    fontSize: 10, fontFamily: T.mono, color: T.muted,
+                  }}>Rafraîchir</button>
+                </div>
+
+                <a href="/api/youtube-connect" style={{
+                  display: "inline-block", padding: "11px 22px",
+                  background: ytConnected ? "transparent" : T.accent,
+                  color: ytConnected ? T.accent : "#fff",
+                  border: `1px solid ${T.accent}`,
+                  borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13,
+                  textDecoration: "none",
                 }}>
-                  <strong style={{ color: T.blue }}>Comment obtenir ta clé API YouTube :</strong><br />
-                  1. Va sur <span style={{ fontFamily: T.mono, color: T.accent }}>console.cloud.google.com</span><br />
-                  2. Crée un projet → "APIs & Services" → "Bibliothèque"<br />
-                  3. Recherche "YouTube Data API v3" → Activer<br />
-                  4. "Identifiants" → "Créer des identifiants" → "Clé API"<br />
-                  5. Copie la clé ici ↓ (gratuit, 10 000 requêtes/jour)
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <input
-                    type="password"
-                    value={youtubeKey}
-                    onChange={e => setYoutubeKey(e.target.value)}
-                    placeholder="AIzaSy... (clé YouTube Data API v3)"
-                    style={{
-                      flex: 1, background: T.bg0, border: `1px solid ${T.border}`,
-                      borderRadius: 6, padding: "10px 14px", color: T.text, fontSize: 13,
-                      fontFamily: T.mono, outline: "none",
-                    }}
-                  />
-                  <button onClick={() => { if (youtubeKey.startsWith("AIza")) setSavedKey(youtubeKey); }} style={{
-                    padding: "10px 20px", background: T.accent, color: T.bg0,
-                    border: "none", borderRadius: 6, cursor: "pointer",
-                    fontWeight: 700, fontSize: 13, fontFamily: T.mono,
-                  }}>
-                    SAUVEGARDER
-                  </button>
-                </div>
-                {savedKey && (
-                  <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.green }} />
-                    <span style={{ fontSize: 12, color: T.green, fontFamily: T.mono }}>API YouTube connectée ✓</span>
+                  {ytConnected ? "Reconnecter" : "Connecter YouTube"}
+                </a>
+
+                {ytReason === "expired" && (
+                  <div style={{ marginTop: 14, padding: 10, background: `${T.blue}11`, borderRadius: 6, fontSize: 11, color: T.muted, lineHeight: 1.6 }}>
+                    En mode test Google, l'accès expire tous les 7 jours. Reclique "Reconnecter" pour renouveler — instantané, un simple clic sur ton compte.
                   </div>
                 )}
               </div>
