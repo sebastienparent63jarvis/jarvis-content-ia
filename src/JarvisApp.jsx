@@ -261,6 +261,7 @@ export default function JarvisApp() {
   const [ytUploadStatus, setYtUploadStatus] = useState(null);
   const [ytUploadError, setYtUploadError] = useState(null);
   const [ytPublishedId, setYtPublishedId] = useState(null);
+  const [ytThumbWarning, setYtThumbWarning] = useState(null);
   const [thumbLoading, setThumbLoading] = useState(false);
   const [thumbUrl, setThumbUrl] = useState(null);
   const [thumbError, setThumbError] = useState(null);
@@ -546,33 +547,48 @@ export default function JarvisApp() {
       if (!upRes.ok) throw new Error("Échec de l'envoi : " + (upData.error?.message || "erreur inconnue"));
       const videoId = upData.id;
 
-      // 6. Applique la miniature (si générée)
+      // 6. Applique la miniature (si générée). On récupère l'image HCTI via une
+      // fonction serveur (contourne le blocage CORS du fetch navigateur), puis on
+      // l'envoie à YouTube.
       let thumbWarning = null;
       if (thumbUrl && videoId) {
         try {
           setYtUploadStatus("Application de la miniature…");
-          const thumbResp = await fetch(thumbUrl);
-          const thumbBlob = await thumbResp.blob();
+          // Récupère l'image côté serveur (pas de CORS)
+          const proxRes = await fetch("/api/fetch-image", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: thumbUrl }),
+          });
+          const proxData = await proxRes.json();
+          if (!proxRes.ok) throw new Error(proxData.error || "récupération image échouée");
+          // base64 → blob
+          const bin = atob(proxData.base64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const thumbBlob = new Blob([bytes], { type: proxData.contentType || "image/png" });
+
           const thumbSet = await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "image/png" },
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": proxData.contentType || "image/png" },
             body: thumbBlob,
           });
           if (!thumbSet.ok) {
             const te = await thumbSet.json().catch(() => ({}));
             const msg = te.error?.message || "";
-            thumbWarning = /verif/i.test(msg) || thumbSet.status === 403
-              ? "La vidéo est publiée, mais la miniature n'a pas pu être appliquée : ta chaîne doit être VÉRIFIÉE par téléphone pour utiliser des miniatures personnalisées (youtube.com/verify). Tu peux l'ajouter à la main en attendant."
-              : "La vidéo est publiée, mais la miniature a échoué : " + (msg || `HTTP ${thumbSet.status}`);
+            thumbWarning = (/verif/i.test(msg) || thumbSet.status === 403)
+              ? "⚠️ Vidéo publiée, mais miniature refusée : ta chaîne Actu Crue doit être VÉRIFIÉE par téléphone pour les miniatures personnalisées. Va sur youtube.com/verify (gratuit, code SMS), puis republie ou ajoute la miniature à la main."
+              : "⚠️ Vidéo publiée, mais miniature refusée : " + (msg || `HTTP ${thumbSet.status}`);
           }
         } catch (te) {
-          thumbWarning = "La vidéo est publiée, mais la miniature n'a pas pu être envoyée : " + te.message;
+          thumbWarning = "⚠️ Vidéo publiée, mais l'envoi de la miniature a échoué : " + te.message;
         }
+      } else if (!thumbUrl) {
+        thumbWarning = "ℹ️ Aucune miniature n'avait été générée : la vidéo est publiée sans miniature personnalisée.";
       }
 
       setYtPublishedId(videoId);
       setYtUploadStatus(null);
-      if (thumbWarning) setYtUploadError(thumbWarning);
+      setYtThumbWarning(thumbWarning); // affiché DANS le bloc succès (visible)
       addToLog({
         type: "PUBLICATION YOUTUBE",
         decision: `Uploadée (privée) : "${pipelineScript.title}"`,
@@ -1300,6 +1316,11 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                             <div style={{ fontSize: 12, color: T.green, fontWeight: 700, marginBottom: 6 }}>
                               ✓ Vidéo envoyée sur YouTube {ytPublishAt ? "et planifiée" : "(en privé)"}
                             </div>
+                            {ytThumbWarning && (
+                              <div style={{ fontSize: 11, color: /⚠️/.test(ytThumbWarning) ? T.red : T.muted, lineHeight: 1.6, marginBottom: 8 }}>
+                                {ytThumbWarning}
+                              </div>
+                            )}
                             <a href={`https://studio.youtube.com/video/${ytPublishedId}/edit`} target="_blank" rel="noreferrer"
                               style={{ fontSize: 11, color: T.accent, fontFamily: T.mono, textDecoration: "none" }}>
                               ↗ Voir/ajuster dans YouTube Studio
