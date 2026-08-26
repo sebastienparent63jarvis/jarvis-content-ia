@@ -87,6 +87,60 @@ export function maskHtml({ title, category, hookWord, bgUrl }) {
   </body></html>`;
 }
 
+// Variante MINIATURE 16:9 (1280x720) pour la couverture YouTube (hors fil Shorts).
+// Mise en page horizontale : badge haut-gauche, titre bas-gauche sur ~2/3 de la
+// largeur pour laisser respirer l'image à droite.
+export function maskHtml169({ title, category, hookWord, bgUrl }) {
+  const B = BRAND;
+  const rawTitle = (title || "").toString();
+  let head = esc(rawTitle);
+  const colorOne = (pattern) => {
+    try {
+      const re = new RegExp("(" + pattern + ")", "i");
+      if (re.test(head)) { head = head.replace(re, `<b>$1</b>`); return true; }
+    } catch { /* ignore */ }
+    return false;
+  };
+  const escRe = (s) => esc(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let done = false;
+  if (hookWord && hookWord.toString().trim()) done = colorOne(escRe(hookWord.toString().trim()));
+  if (!done) done = colorOne("\\d[\\d\\s.,]*\\s?(?:%|€|\\$|euros?)?");
+  if (!done) {
+    const words = rawTitle.split(/\s+/).filter(w => w.replace(/[^\wÀ-ÿ]/g, "").length > 4);
+    if (words.length) colorOne(escRe(words.sort((a, b) => b.length - a.length)[0]));
+  }
+
+  let catLabel = (category || "").toString().trim();
+  if (catLabel.length > 34) catLabel = catLabel.slice(0, 34).replace(/[\s,(]+\S*$/, "") + "…";
+  const catHtml = catLabel ? `<span class="cat">${esc(catLabel)}</span>` : "";
+
+  const tlen = rawTitle.length;
+  const titleSize = tlen > 55 ? 60 : tlen > 38 ? 72 : 84;
+  const bgLayer = bgUrl ? `<img class="bg" src="${esc(bgUrl)}"/>` : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{width:1280px;height:720px;overflow:hidden;font-family:'Inter',sans-serif;background:#000 !important;}
+    .frame{position:relative;width:1280px;height:720px;background:#000;}
+    .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+    .veil{position:absolute;inset:0;background:linear-gradient(115deg,rgba(10,14,22,0.92) 0%,rgba(10,14,22,0.72) 38%,rgba(10,14,22,0.15) 70%,rgba(10,14,22,0) 100%);}
+    .badge{position:absolute;top:44px;left:48px;display:flex;align-items:center;}
+    .badge .ac{background:${B.purple};color:${B.white};font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:38px;letter-spacing:-1px;padding:7px 18px;border-radius:11px;}
+    .badge .nm{color:${B.white};font-weight:800;font-size:30px;letter-spacing:0.14em;margin-left:20px;}
+    .band{position:absolute;left:48px;bottom:52px;width:72%;}
+    .cat{display:inline-block;color:${B.white};background:${B.purple};font-size:26px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;padding:8px 18px;border-radius:8px;margin-bottom:22px;}
+    .title{color:${B.white};font-weight:900;font-size:${titleSize}px;line-height:1.04;letter-spacing:-0.02em;text-shadow:0 2px 16px rgba(0,0,0,0.5);}
+    .title b{color:${B.purpleLight};font-weight:900;}
+  </style></head><body>
+    <div class="frame">
+      ${bgLayer}
+      <div class="veil"></div>
+      <div class="badge"><span class="ac">AC</span><span class="nm">ACTU CRUE</span></div>
+      <div class="band">${catHtml}<div class="title">${head}</div></div>
+    </div>
+  </body></html>`;
+}
+
 // HTML de l'écran de fin (outro) : fond violet plein + tampon AC + nom.
 export function outroHtml() {
   const B = BRAND;
@@ -104,7 +158,7 @@ export function outroHtml() {
 }
 
 // Appelle HCTI pour transformer le HTML en image. Renvoie l'URL PNG.
-export async function renderViaHcti(html, { transparent = false } = {}) {
+export async function renderViaHcti(html, { transparent = false, width = 1080, height = 1920 } = {}) {
   const userId = process.env.HCTI_USER_ID;
   const apiKey = process.env.HCTI_API_KEY;
   if (!userId || !apiKey) {
@@ -114,13 +168,11 @@ export async function renderViaHcti(html, { transparent = false } = {}) {
   const payload = {
     html,
     google_fonts: "Inter:wght@600;800;900|Space Grotesk:wght@700|Anton",
-    viewport_width: 1080,
-    viewport_height: 1920,
+    viewport_width: width,
+    viewport_height: height,
     device_scale: 1,
   };
   // Pour l'intro : fond transparent (le masque se superpose à la vidéo).
-  // HCTI produit un PNG transparent quand la page a un fond transparent ; on ne
-  // fixe PAS de selector (qui recadrerait) pour garder tout le cadre 1080x1920.
   if (transparent) payload.transparent = true;
 
   const res = await fetch("https://hcti.io/v1/image", {

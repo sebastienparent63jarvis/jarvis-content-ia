@@ -2,7 +2,7 @@
 // Le fond (image Pexels) est intégré dans le HTML ; HCTI compose tout et renvoie
 // une URL d'image PNG. Nécessite HCTI_USER_ID / HCTI_API_KEY.
 
-import { maskHtml, renderViaHcti } from "./_mask-html.js";
+import { maskHtml169, renderViaHcti } from "./_mask-html.js";
 
 export default async (req, context) => {
   if (req.method !== "POST") {
@@ -22,8 +22,9 @@ export default async (req, context) => {
   }
 
   try {
-    const html = maskHtml({ title: titleText, category, hookWord, bgUrl: bgImage || null });
-    const url = await renderViaHcti(html);
+    // Miniature au format 16:9 (1280x720) exigé par YouTube pour la couverture.
+    const html = maskHtml169({ title: titleText, category, hookWord, bgUrl: bgImage || null });
+    const url = await renderViaHcti(html, { width: 1280, height: 720 });
     return new Response(JSON.stringify({ url }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
