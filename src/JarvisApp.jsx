@@ -255,6 +255,11 @@ export default function JarvisApp() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoStatus, setVideoStatus] = useState(null); // texte d'étape en cours
   const [videoUrl, setVideoUrl] = useState(null);
+  const [ytPublishAt, setYtPublishAt] = useState(""); // date/heure de publication planifiée
+  const [ytUploading, setYtUploading] = useState(false);
+  const [ytUploadStatus, setYtUploadStatus] = useState(null);
+  const [ytUploadError, setYtUploadError] = useState(null);
+  const [ytPublishedId, setYtPublishedId] = useState(null);
   const [thumbLoading, setThumbLoading] = useState(false);
   const [thumbUrl, setThumbUrl] = useState(null);
   const [thumbError, setThumbError] = useState(null);
@@ -471,6 +476,103 @@ export default function JarvisApp() {
     setPipelineLoading(false);
   };
 
+
+  // Upload direct navigateur → YouTube (évite de faire transiter le MP4 par nos
+  // fonctions). Vidéo en PRIVÉ + date de publication planifiée (publishAt).
+  const handlePublishYouTube = async () => {
+    if (!videoUrl || !pipelineScript) return;
+    setYtUploading(true);
+    setYtUploadError(null);
+    setYtPublishedId(null);
+    try {
+      // 1. Jeton d'accès frais (le refresh_token reste côté serveur)
+      setYtUploadStatus("Authentification YouTube…");
+      const tokRes = await fetch("/api/youtube-token", { method: "POST" });
+      const tokData = await tokRes.json();
+      if (!tokRes.ok) {
+        if (tokData.reason === "expired") throw new Error("Connexion YouTube expirée. Va dans Paramètres → Reconnecter.");
+        if (tokData.reason === "not_connected") throw new Error("YouTube non connecté. Va dans Paramètres → Connecter YouTube.");
+        throw new Error(tokData.error || "Impossible d'obtenir l'accès YouTube");
+      }
+      const accessToken = tokData.access_token;
+
+      // 2. Récupère le MP4 (depuis Shotstack) en blob
+      setYtUploadStatus("Récupération de la vidéo…");
+      const vidResp = await fetch(videoUrl);
+      const videoBlob = await vidResp.blob();
+
+      // 3. Métadonnées. publishAt impose privacyStatus "private".
+      const publishAtIso = ytPublishAt ? new Date(ytPublishAt).toISOString() : null;
+      const metadata = {
+        snippet: {
+          title: (pipelineScript.title || "Actu Crue").slice(0, 100),
+          description: pipelineScript.description || "",
+          categoryId: "25", // News & Politics
+        },
+        status: {
+          privacyStatus: "private",
+          selfDeclaredMadeForKids: false,
+          ...(publishAtIso ? { publishAt: publishAtIso } : {}),
+        },
+      };
+
+      // 4. Démarre l'upload resumable (renvoie une URL d'upload dans Location)
+      setYtUploadStatus("Ouverture du transfert vers YouTube…");
+      const initRes = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "X-Upload-Content-Type": "video/mp4",
+        },
+        body: JSON.stringify(metadata),
+      });
+      if (!initRes.ok) {
+        const errTxt = await initRes.text();
+        throw new Error("YouTube a refusé l'ouverture du transfert : " + errTxt.slice(0, 200));
+      }
+      const uploadUrl = initRes.headers.get("location");
+      if (!uploadUrl) throw new Error("YouTube n'a pas renvoyé d'URL de transfert");
+
+      // 5. Envoie les octets de la vidéo
+      setYtUploadStatus("Envoi de la vidéo à YouTube… (ne ferme pas l'app)");
+      const upRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "video/mp4" },
+        body: videoBlob,
+      });
+      const upData = await upRes.json();
+      if (!upRes.ok) throw new Error("Échec de l'envoi : " + (upData.error?.message || "erreur inconnue"));
+      const videoId = upData.id;
+
+      // 6. Applique la miniature (si générée)
+      if (thumbUrl && videoId) {
+        try {
+          setYtUploadStatus("Application de la miniature…");
+          const thumbResp = await fetch(thumbUrl);
+          const thumbBlob = await thumbResp.blob();
+          await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "image/png" },
+            body: thumbBlob,
+          });
+        } catch { /* la miniature custom peut échouer si chaîne non vérifiée — non bloquant */ }
+      }
+
+      setYtPublishedId(videoId);
+      setYtUploadStatus(null);
+      addToLog({
+        type: "PUBLICATION YOUTUBE",
+        decision: `Uploadée (privée) : "${pipelineScript.title}"`,
+        rationale: publishAtIso ? `Publication planifiée : ${new Date(publishAtIso).toLocaleString("fr-FR")}` : "En privé, sans date (à publier manuellement)",
+        kpi: "Phase 5 ✓",
+      });
+    } catch (e) {
+      setYtUploadError(e.message);
+      setYtUploadStatus(null);
+    }
+    setYtUploading(false);
+  };
 
   // Vérifie l'état de connexion YouTube (OAuth).
   const checkYouTube = async () => {
@@ -1156,17 +1258,78 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                         )}
                       </div>
 
+                      {/* ── PUBLICATION AUTOMATIQUE YOUTUBE ── */}
+                      <div style={{ marginTop: 8, marginBottom: 12, padding: 14, background: `${T.accent}11`, border: `1px solid ${T.accent}55`, borderRadius: 10 }}>
+                        <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          🚀 Publier automatiquement sur YouTube
+                        </div>
+                        <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.6, marginBottom: 12 }}>
+                          Envoie la vidéo sur ta chaîne en <strong style={{ color: T.text }}>privé</strong>, avec titre, description et miniature. Choisis quand elle sera publiée automatiquement (ou laisse vide pour décider plus tard dans Studio).
+                        </div>
+
+                        <label style={{ fontSize: 10, fontFamily: T.mono, color: T.muted, display: "block", marginBottom: 6 }}>
+                          DATE & HEURE DE PUBLICATION (optionnel)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={ytPublishAt}
+                          onChange={e => setYtPublishAt(e.target.value)}
+                          style={{
+                            width: "100%", background: T.bg0, border: `1px solid ${T.border}`,
+                            borderRadius: 6, padding: "9px 12px", color: T.text, fontSize: 13,
+                            fontFamily: T.sans, outline: "none", boxSizing: "border-box", marginBottom: 12,
+                            colorScheme: "dark",
+                          }}
+                        />
+
+                        {ytPublishedId ? (
+                          <div style={{ padding: 12, background: `${T.green}18`, border: `1px solid ${T.green}55`, borderRadius: 8 }}>
+                            <div style={{ fontSize: 12, color: T.green, fontWeight: 700, marginBottom: 6 }}>
+                              ✓ Vidéo envoyée sur YouTube {ytPublishAt ? "et planifiée" : "(en privé)"}
+                            </div>
+                            <a href={`https://studio.youtube.com/video/${ytPublishedId}/edit`} target="_blank" rel="noreferrer"
+                              style={{ fontSize: 11, color: T.accent, fontFamily: T.mono, textDecoration: "none" }}>
+                              ↗ Voir/ajuster dans YouTube Studio
+                            </a>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={handlePublishYouTube}
+                            disabled={ytUploading}
+                            style={{
+                              width: "100%", padding: "12px", background: ytUploading ? T.accentDim : T.accent,
+                              color: "#fff", border: "none", borderRadius: 8, cursor: ytUploading ? "not-allowed" : "pointer",
+                              fontWeight: 800, fontSize: 13,
+                            }}
+                          >
+                            {ytUploading ? <>{ytUploadStatus || "Envoi…"} <Spinner /></> : "Publier sur YouTube"}
+                          </button>
+                        )}
+                        {ytUploadError && (
+                          <div style={{ marginTop: 10, fontSize: 11, color: T.red, lineHeight: 1.5 }}>{ytUploadError}</div>
+                        )}
+                        {ytPublishAt && !ytPublishedId && (
+                          <div style={{ marginTop: 8, fontSize: 10, color: T.muted }}>
+                            Rappel : la publication planifiée exige que la date soit dans le futur.
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: 10, color: T.muted, textAlign: "center", margin: "10px 0 6px" }}>
+                        — ou publie à la main —
+                      </div>
                       <a
                         href="https://studio.youtube.com/channel/UClW3vKJDea-ZZu861ly8rhQ/videos/upload"
                         target="_blank" rel="noreferrer"
                         style={{
-                          display: "block", textAlign: "center", marginTop: 8,
-                          padding: "12px", background: T.accent, color: T.bg0,
-                          borderRadius: 8, fontWeight: 800, fontSize: 13, fontFamily: T.mono,
+                          display: "block", textAlign: "center", marginTop: 4,
+                          padding: "10px", background: "transparent", color: T.muted,
+                          border: `1px solid ${T.border}`,
+                          borderRadius: 8, fontWeight: 700, fontSize: 12, fontFamily: T.mono,
                           textDecoration: "none",
                         }}
                       >
-                        ↗ OUVRIR YOUTUBE STUDIO POUR PUBLIER
+                        ↗ Ouvrir YouTube Studio (upload manuel)
                       </a>
                       <button
                         onClick={() => {
