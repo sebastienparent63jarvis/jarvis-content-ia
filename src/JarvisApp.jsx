@@ -559,18 +559,19 @@ export default function JarvisApp() {
           });
           const setData = await setRes.json();
           if (setData.ok) {
-            thumbWarning = null; // succès
+            // Diagnostic : YouTube a répondu OK. Si la miniature n'apparaît pas
+            // ensuite, c'est un rejet différé côté YouTube (droits chaîne).
+            thumbWarning = `✓ YouTube a accepté la miniature (image ${setData.thumb_size_ko || "?"} Ko, réponse OK). Si elle n'apparaît pas dans Studio, YouTube l'a écartée au traitement.`;
           } else if (setData.youtube_error) {
-            // Erreur BRUTE de YouTube — on l'affiche pour diagnostic réel.
-            thumbWarning = `⚠️ Miniature refusée par YouTube (HTTP ${setData.status}, image ${setData.thumb_size_ko} Ko). Réponse : ${setData.youtube_error}`;
+            thumbWarning = `⚠️ Miniature refusée par YouTube (HTTP ${setData.status}, image ${setData.thumb_size_ko} Ko). Réponse exacte : ${setData.youtube_error}`;
           } else {
             thumbWarning = "⚠️ Miniature non appliquée : " + (setData.error || "raison inconnue");
           }
         } catch (te) {
-          thumbWarning = "⚠️ Miniature non appliquée : " + te.message;
+          thumbWarning = "⚠️ Miniature non appliquée (erreur réseau) : " + te.message;
         }
-      } else if (!thumbUrl) {
-        thumbWarning = "ℹ️ Aucune miniature n'avait été générée : la vidéo est publiée sans miniature personnalisée.";
+      } else {
+        thumbWarning = "ℹ️ Aucune miniature n'était en mémoire au moment de publier (thumbUrl vide). As-tu bien cliqué 'Générer la miniature' avant de publier ?";
       }
 
       setYtPublishedId(videoId);
