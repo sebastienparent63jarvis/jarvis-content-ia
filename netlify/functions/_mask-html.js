@@ -158,7 +158,7 @@ export function outroHtml() {
 }
 
 // Appelle HCTI pour transformer le HTML en image. Renvoie l'URL PNG.
-export async function renderViaHcti(html, { transparent = false, width = 1080, height = 1920 } = {}) {
+export async function renderViaHcti(html, { transparent = false, width = 1080, height = 1920, format = "png" } = {}) {
   const userId = process.env.HCTI_USER_ID;
   const apiKey = process.env.HCTI_API_KEY;
   if (!userId || !apiKey) {
@@ -184,6 +184,8 @@ export async function renderViaHcti(html, { transparent = false, width = 1080, h
   if (!res.ok) {
     throw new Error("HCTI: " + (data.message || data.error || `HTTP ${res.status}`));
   }
-  // On force le format PNG (supporte la transparence).
-  return data.url + ".png";
+  // Format de sortie : PNG (transparence, intro) ou JPEG (photo compressée,
+  // miniature — bien plus léger, reste sous la limite YouTube de 2 Mo).
+  const ext = format === "jpeg" || format === "jpg" ? "jpeg" : "png";
+  return data.url + "." + ext;
 }

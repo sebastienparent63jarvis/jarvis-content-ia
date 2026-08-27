@@ -547,6 +547,28 @@ export default function JarvisApp() {
       if (!upRes.ok) throw new Error("Échec de l'envoi : " + (upData.error?.message || "erreur inconnue"));
       const videoId = upData.id;
 
+      // 5bis. Attend que YouTube ait AVANCÉ le traitement de la vidéo avant de
+      // poser la miniature (cause possible du rejet : miniature posée trop tôt,
+      // écartée quand le traitement se termine). On sonde le statut, max ~90s ;
+      // on continue dès que le traitement est terminé, ou après le délai.
+      if (thumbUrl && videoId) {
+        setYtUploadStatus("YouTube traite la vidéo… (attente avant la miniature)");
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        for (let i = 0; i < 18; i++) {
+          await sleep(5000);
+          try {
+            const stRes = await fetch("/api/youtube-video-status", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ videoId }),
+            });
+            const st = await stRes.json();
+            // On s'arrête dès que le traitement est fini (succeeded/processed).
+            if (st.processingStatus === "succeeded" || st.uploadStatus === "processed") break;
+            if (st.processingStatus === "failed" || st.processingStatus === "terminated") break;
+          } catch { /* on retente au tour suivant */ }
+        }
+      }
+
       // 6. Applique la miniature ENTIÈREMENT côté serveur (récupération image +
       // thumbnails/set), pour éviter tout CORS et récupérer l'erreur brute de YouTube.
       let thumbWarning = null;

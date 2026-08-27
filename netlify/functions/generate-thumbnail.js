@@ -24,7 +24,7 @@ export default async (req, context) => {
   try {
     // Miniature au format 16:9 (1280x720) exigé par YouTube pour la couverture.
     const html = maskHtml({ title: titleText, category, hookWord, bgUrl: bgImage || null });
-    const url = await renderViaHcti(html); // format vertical 9:16 (1080x1920), adapté aux Shorts
+    const url = await renderViaHcti(html, { format: "jpeg" }); // JPEG : photo compressée, léger (<2 Mo YouTube), vertical 9:16
     return new Response(JSON.stringify({ url }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
