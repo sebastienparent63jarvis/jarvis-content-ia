@@ -547,40 +547,27 @@ export default function JarvisApp() {
       if (!upRes.ok) throw new Error("Échec de l'envoi : " + (upData.error?.message || "erreur inconnue"));
       const videoId = upData.id;
 
-      // 6. Applique la miniature (si générée). On récupère l'image HCTI via une
-      // fonction serveur (contourne le blocage CORS du fetch navigateur), puis on
-      // l'envoie à YouTube.
+      // 6. Applique la miniature ENTIÈREMENT côté serveur (récupération image +
+      // thumbnails/set), pour éviter tout CORS et récupérer l'erreur brute de YouTube.
       let thumbWarning = null;
       if (thumbUrl && videoId) {
+        setYtUploadStatus("Application de la miniature…");
         try {
-          setYtUploadStatus("Application de la miniature…");
-          // Récupère l'image côté serveur (pas de CORS)
-          const proxRes = await fetch("/api/fetch-image", {
+          const setRes = await fetch("/api/youtube-set-thumbnail", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: thumbUrl }),
+            body: JSON.stringify({ videoId, thumbUrl }),
           });
-          const proxData = await proxRes.json();
-          if (!proxRes.ok) throw new Error(proxData.error || "récupération image échouée");
-          // base64 → blob
-          const bin = atob(proxData.base64);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          const thumbBlob = new Blob([bytes], { type: proxData.contentType || "image/png" });
-
-          const thumbSet = await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": proxData.contentType || "image/png" },
-            body: thumbBlob,
-          });
-          if (!thumbSet.ok) {
-            const te = await thumbSet.json().catch(() => ({}));
-            const msg = te.error?.message || "";
-            thumbWarning = (/verif/i.test(msg) || thumbSet.status === 403)
-              ? "⚠️ Vidéo publiée, mais miniature refusée : ta chaîne Actu Crue doit être VÉRIFIÉE par téléphone pour les miniatures personnalisées. Va sur youtube.com/verify (gratuit, code SMS), puis republie ou ajoute la miniature à la main."
-              : "⚠️ Vidéo publiée, mais miniature refusée : " + (msg || `HTTP ${thumbSet.status}`);
+          const setData = await setRes.json();
+          if (setData.ok) {
+            thumbWarning = null; // succès
+          } else if (setData.youtube_error) {
+            // Erreur BRUTE de YouTube — on l'affiche pour diagnostic réel.
+            thumbWarning = `⚠️ Miniature refusée par YouTube (HTTP ${setData.status}, image ${setData.thumb_size_ko} Ko). Réponse : ${setData.youtube_error}`;
+          } else {
+            thumbWarning = "⚠️ Miniature non appliquée : " + (setData.error || "raison inconnue");
           }
         } catch (te) {
-          thumbWarning = "⚠️ Vidéo publiée, mais l'envoi de la miniature a échoué : " + te.message;
+          thumbWarning = "⚠️ Miniature non appliquée : " + te.message;
         }
       } else if (!thumbUrl) {
         thumbWarning = "ℹ️ Aucune miniature n'avait été générée : la vidéo est publiée sans miniature personnalisée.";
