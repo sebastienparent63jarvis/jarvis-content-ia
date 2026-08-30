@@ -56,7 +56,11 @@ export default async (req, context) => {
   const clipByIndex = {};
   (clips || []).forEach((c) => { if (c.clip && c.clip.link) clipByIndex[c.segment_index] = c.clip.link; });
 
-  const INTRO_DUR = 3;   // durée de l'intro (masque) — le contenu commence après
+  // Intro TRÈS courte : le masque de marque s'affiche brièvement puis balaie.
+  // CLÉ RÉTENTION : la voix et la vidéo démarrent dès la seconde 0 (le masque se
+  // superpose par-dessus le tout début), pour que le hook parlé soit entendu
+  // IMMÉDIATEMENT — on ne fait plus attendre le spectateur, qui sinon balaie.
+  const INTRO_DUR = 1.3;
   const hookWord = (word || "").toString().trim();
 
   // Échappe une regex et colore le mot-clé de référence dans un sous-titre,
@@ -76,17 +80,15 @@ export default async (req, context) => {
   const captionClips = [];
   const audioClips = [];
 
-  // (L'intro est une image opaque plein cadre 0→INTRO_DUR : pas besoin de fond
-  // vidéo sous elle.)
-
   segments.forEach((seg, i) => {
     const real = realByIndex[i];
     const dur = real && real.duration
       ? real.duration + 0.15
       : Math.max(2, seg.duration_estimate_sec || 5);
     const videoLink = clipByIndex[i];
-    // Tout le contenu est décalé APRÈS l'intro pour ne jamais chevaucher le masque.
-    const at = cursor + INTRO_DUR;
+    // Le contenu démarre à 0 (la voix hook joue tout de suite). Le masque d'intro
+    // se superpose seulement sur le tout début puis balaie.
+    const at = cursor;
 
     if (real && real.url) {
       audioClips.push({ asset: { type: "audio", src: real.url }, start: at, length: dur });
@@ -125,12 +127,12 @@ export default async (req, context) => {
   });
 
   const contentDuration = cursor;
-  const totalDuration = INTRO_DUR + contentDuration; // intro + contenu
+  const totalDuration = contentDuration; // le contenu démarre à 0 (intro superposée)
 
-  // ---- INTRO : masque de marque (image opaque) sur 0→INTRO_DUR ----
-  // PAS de fondu d'entrée : la toute première frame est le masque NET et complet,
-  // pour que la couverture auto-choisie par YouTube (Shorts) soit propre. Sortie
-  // en balayage vers la droite pour révéler la vidéo.
+  // ---- INTRO : masque de marque (image opaque) superposé sur le tout début ----
+  // Court (INTRO_DUR), PAS de fondu d'entrée (1re frame nette = couverture Shorts
+  // propre), sortie en balayage vers la droite pour révéler la vidéo qui joue déjà
+  // dessous, pendant que la voix hook est déjà lancée.
   const introClips = introMaskUrl ? [{
     asset: { type: "image", src: introMaskUrl },
     start: 0, length: INTRO_DUR,
@@ -148,10 +150,10 @@ export default async (req, context) => {
 
   const grandTotal = totalDuration + OUTRO_DUR;
 
-  // Piste audio : segments calés (mode réel, décalés après l'intro) ou bloc unique.
+  // Piste audio : segments calés (mode réel) ou bloc unique — démarre à 0.
   const audioTrack = hasRealAudio
     ? { clips: audioClips }
-    : { clips: [{ asset: { type: "audio", src: audioUrl }, start: INTRO_DUR, length: contentDuration }] };
+    : { clips: [{ asset: { type: "audio", src: audioUrl }, start: 0, length: contentDuration }] };
 
   const timeline = {
     background: "#000000",
