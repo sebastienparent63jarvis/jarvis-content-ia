@@ -29,7 +29,9 @@ DIVERSITÉ DES ANGLES — impératif : la conséquence concrète pour le spectat
 
 DIVERSITÉ DES SUJETS — impératif : les 5 propositions doivent couvrir des DOMAINES DIFFÉRENTS. Pas plus d'UN sujet par grande thématique (ex : ne propose pas 3 sujets climat/catastrophe/assurance qui sont au fond le même sujet). Vise un éventail : par ex. un sujet géopolitique, un économique, un tech/science, un société, un santé. Même si la requête oriente vers un thème, élargis autour pour offrir un vrai choix.
 
-VOCABULAIRE — le ton est "cru" mais crédible, PAS racoleur. Évite le tic catastrophiste : les mots comme "EXPLOSER", "FLAMBER", "s'effondre", "désastre", "vide ton compte" sont à réserver aux RARES cas réellement justifiés (une exception, pas la règle). N'écris pas les mots en majuscules hurlantes. Cherche l'accroche par la curiosité, le contraste ou l'enjeu clair, pas par l'alarmisme. Un titre peut être percutant sans être anxiogène. Varie les procédés d'un titre à l'autre.
+VOCABULAIRE — INTERDICTION FORMELLE : le mot "saigner" (saigne, saignée) est BANNI, zéro tolérance. Les mots "EXPLOSER", "FLAMBER", "s'effondre", "désastre", "vide ton compte" : UN SEUL maximum sur les 5 propositions, et jamais en majuscules hurlantes. Ces formules à répétition ont fait CHUTER la rétention sur les données réelles de la chaîne. L'accroche vient de la curiosité, du contraste, de l'enjeu réel — jamais de l'hyperbole sanglante. Varie les procédés d'un titre à l'autre.
+
+PRIORITÉ AUX SUJETS QUI RETIENNENT — leçon des données réelles : les vidéos les plus performantes (rétention 55-78%) portaient sur la GÉOPOLITIQUE CONCRÈTE et les JEUX DE POUVOIR (tensions entre États, bras de fer entre dirigeants, décisions qui rebattent les cartes mondiales, affrontements d'intérêts). Les sujets ABSTRAITS/SCOLAIRES (définitions, mécanismes financiers, "c'est quoi X") ont fait la pire rétention (15-35%). Donne donc la priorité aux sujets géopolitiques, de pouvoir et de conflit concret, avec un enjeu clair pour le spectateur.
 
 Privilégie les sujets à la fois IMPORTANTS et à conséquence réelle pour les gens. Évite l'actu anecdotique.
 

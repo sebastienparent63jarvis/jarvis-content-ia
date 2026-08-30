@@ -29,7 +29,9 @@ DIVERSITÉ OBLIGATOIRE : tu produis plusieurs vidéos. Ne traite jamais deux foi
 Ton : chaleureux et accessible sur le FOND (on démocratise, on explique à un ami), mais l'EMBALLAGE doit être natif Shorts — tension, curiosité, révélation. Le public des Shorts ne veut pas un cours : il veut un choc ou une promesse forte, PUIS il apprend en douce. L'esprit "grande émission éducative" vit dans la clarté de l'explication, pas dans un ton scolaire ou un titre descriptif.
 
 TITRE ET ANGLE — leçon tirée des données réelles de la chaîne : les formulations descriptives/scolaires ("C'est quoi un ETF", "expliqué simplement", "comprendre X") FONT FUIR. Les titres qui marchent créent de la CURIOSITÉ et de la TENSION, mais par des moyens VARIÉS : une question intrigante, un contraste inattendu, un enjeu clair, une révélation, un chiffre parlant, un paradoxe. 
-IMPORTANT — évite le tic catastrophiste : les mots gore comme "saigne", "flambe", "explose", "vide ton compte", "s'effondre" sont à réserver aux RARES cas où c'est réellement justifié par les faits (une exception, pas la règle). Les utiliser à chaque titre les rend faux et lassants, et décrédibilise la chaîne. Cherche la force par la précision et l'angle, pas par l'hyperbole. Un titre peut être percutant sans être alarmiste. Varie tes procédés d'un titre à l'autre : ne réutilise pas la même formule ni le même mot-choc que sur tes vidéos récentes.
+INTERDICTION FORMELLE DE VOCABULAIRE — non négociable : le mot "saigner" (et "saigne", "saignée") est BANNI des titres ET de la narration. Zéro tolérance. Les autres mots gore — "flambe", "explose", "s'effondre", "vide ton compte" — sont limités à UN SEUL maximum par vidéo, et seulement si les faits le justifient vraiment. Ces formules, à répétition, ont FAIT CHUTER la rétention sur les données réelles de la chaîne : le public sent le racolage et balaie. La force d'un titre vient de la PRÉCISION, de la TENSION RÉELLE et de l'ENJEU CLAIR, jamais de l'hyperbole sanglante. Interdiction aussi de réutiliser la même formule d'un titre à l'autre.
+
+CE QUI RETIENT VRAIMENT — leçon des données réelles (rétention mesurée) : les vidéos les plus performantes de la chaîne (rétention 55-78%) portaient sur la GÉOPOLITIQUE CONCRÈTE et les JEUX DE POUVOIR — tensions internationales, bras de fer entre États ou dirigeants, décisions qui rebattent les cartes du monde (ex : un pays qui défie un autre, des patrons qui s'opposent à un pouvoir, un acteur qui bouscule l'ordre établi). À l'inverse, les sujets ABSTRAITS ou SCOLAIRES (définitions financières, "c'est quoi X", mécanismes techniques) ont fait la pire rétention (15-35%) et ont été étouffés par l'algorithme. PRIVILÉGIE donc franchement les angles géopolitiques, de pouvoir et de conflit d'intérêts concrets ; ÉVITE les sujets pédagogiques abstraits sauf si tu les rends viscéraux et incarnés (un visage, un affrontement, un enjeu personnel).
 
 RÈGLE D'OR DU TITRE FORT — la promesse doit être TENUE : pousse le vocabulaire du titre au maximum de ce que le contenu peut réellement livrer. Un titre qui promet un choc que la vidéo ne tient pas fait fuir les spectateurs (rétention finale qui s'effondre) et YouTube pénalise. Donc : titre aussi percutant que possible, MAIS le corps de la vidéo doit réellement délivrer ce que le titre promet. Avant de finaliser un titre, vérifie mentalement : "le contenu tient-il cette promesse ?". Si oui, vas-y fort. Si non, trouve un angle choc que le contenu PEUT tenir. Jamais de choc gratuit non tenu — c'est contre-productif.
 
@@ -102,7 +104,29 @@ export function extractScript(text) {
   const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
   if (s !== -1 && e !== -1 && e > s) clean = clean.slice(s, e + 1);
   const script = JSON.parse(clean);
+  scrubBannedWords(script);
   return enforceNarrationLimit(script, 1900);
+}
+
+// Filet de sécurité : le modèle a tendance à réutiliser "saigner" malgré la
+// consigne. On remplace les occurrences par des équivalents neutres, dans le
+// titre, le thumbnail_word et la narration. Dernier rempart si le prompt échoue.
+function scrubBannedWords(script) {
+  if (!script) return;
+  const repl = (str) => {
+    if (typeof str !== "string") return str;
+    return str
+      .replace(/\bsaignent\b/gi, "pèsent")
+      .replace(/\bsaigne\b/gi, "pèse")
+      .replace(/\bsaignée?\b/gi, "ponction")
+      .replace(/\bsaigner\b/gi, "peser sur");
+  };
+  if (script.title) script.title = repl(script.title);
+  if (script.thumbnail_word) script.thumbnail_word = repl(script.thumbnail_word);
+  if (script.description) script.description = repl(script.description);
+  if (Array.isArray(script.narration_segments)) {
+    script.narration_segments.forEach((seg) => { if (seg && seg.text) seg.text = repl(seg.text); });
+  }
 }
 
 // Garantit que la narration totale ne dépasse jamais `maxChars` (marge sous la
