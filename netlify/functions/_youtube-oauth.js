@@ -8,8 +8,13 @@
 import { getStore } from "@netlify/blobs";
 
 export const REDIRECT_PATH = "/api/youtube-callback";
-// Scope minimal : upload seulement (moins sensible que le scope "youtube" complet).
-export const SCOPE = "https://www.googleapis.com/auth/youtube.upload";
+// Scopes : upload (publier) + lecture chaîne + lecture des statistiques.
+// yt-analytics.readonly permet de lire vues, rétention, durée vue, abonnés.
+export const SCOPE = [
+  "https://www.googleapis.com/auth/youtube.upload",
+  "https://www.googleapis.com/auth/youtube.readonly",
+  "https://www.googleapis.com/auth/yt-analytics.readonly",
+].join(" ");
 
 export function redirectUri(host) {
   const proto = host && host.includes("localhost") ? "http" : "https";

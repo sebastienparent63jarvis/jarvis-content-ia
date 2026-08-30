@@ -127,11 +127,14 @@ export default async (req, context) => {
   const contentDuration = cursor;
   const totalDuration = INTRO_DUR + contentDuration; // intro + contenu
 
-  // ---- INTRO : masque de marque (image PNG transparente) sur 0→INTRO_DUR ----
+  // ---- INTRO : masque de marque (image opaque) sur 0→INTRO_DUR ----
+  // PAS de fondu d'entrée : la toute première frame est le masque NET et complet,
+  // pour que la couverture auto-choisie par YouTube (Shorts) soit propre. Sortie
+  // en balayage vers la droite pour révéler la vidéo.
   const introClips = introMaskUrl ? [{
     asset: { type: "image", src: introMaskUrl },
     start: 0, length: INTRO_DUR,
-    transition: { in: "fade", out: "slideRight" },
+    transition: { out: "slideRight" },
   }] : [];
 
   // ---- OUTRO : écran de fin après le contenu ----

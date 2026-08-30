@@ -262,6 +262,10 @@ export default function JarvisApp() {
   const [ytUploadError, setYtUploadError] = useState(null);
   const [ytPublishedId, setYtPublishedId] = useState(null);
   const [ytThumbWarning, setYtThumbWarning] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(null);
+  const [analyticsStart, setAnalyticsStart] = useState("2026-08-21");
   const [thumbLoading, setThumbLoading] = useState(false);
   const [thumbUrl, setThumbUrl] = useState(null);
   const [thumbError, setThumbError] = useState(null);
@@ -547,54 +551,13 @@ export default function JarvisApp() {
       if (!upRes.ok) throw new Error("Échec de l'envoi : " + (upData.error?.message || "erreur inconnue"));
       const videoId = upData.id;
 
-      // 5bis. Attend que YouTube ait AVANCÉ le traitement de la vidéo avant de
-      // poser la miniature (cause possible du rejet : miniature posée trop tôt,
-      // écartée quand le traitement se termine). On sonde le statut, max ~90s ;
-      // on continue dès que le traitement est terminé, ou après le délai.
-      if (thumbUrl && videoId) {
-        setYtUploadStatus("YouTube traite la vidéo… (attente avant la miniature)");
-        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-        for (let i = 0; i < 18; i++) {
-          await sleep(5000);
-          try {
-            const stRes = await fetch("/api/youtube-video-status", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ videoId }),
-            });
-            const st = await stRes.json();
-            // On s'arrête dès que le traitement est fini (succeeded/processed).
-            if (st.processingStatus === "succeeded" || st.uploadStatus === "processed") break;
-            if (st.processingStatus === "failed" || st.processingStatus === "terminated") break;
-          } catch { /* on retente au tour suivant */ }
-        }
-      }
-
-      // 6. Applique la miniature ENTIÈREMENT côté serveur (récupération image +
-      // thumbnails/set), pour éviter tout CORS et récupérer l'erreur brute de YouTube.
-      let thumbWarning = null;
-      if (thumbUrl && videoId) {
-        setYtUploadStatus("Application de la miniature…");
-        try {
-          const setRes = await fetch("/api/youtube-set-thumbnail", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ videoId, thumbUrl }),
-          });
-          const setData = await setRes.json();
-          if (setData.ok) {
-            // Diagnostic : YouTube a répondu OK. Si la miniature n'apparaît pas
-            // ensuite, c'est un rejet différé côté YouTube (droits chaîne).
-            thumbWarning = `✓ YouTube a accepté la miniature (image ${setData.thumb_size_ko || "?"} Ko, réponse OK). Si elle n'apparaît pas dans Studio, YouTube l'a écartée au traitement.`;
-          } else if (setData.youtube_error) {
-            thumbWarning = `⚠️ Miniature refusée par YouTube (HTTP ${setData.status}, image ${setData.thumb_size_ko} Ko). Réponse exacte : ${setData.youtube_error}`;
-          } else {
-            thumbWarning = "⚠️ Miniature non appliquée : " + (setData.error || "raison inconnue");
-          }
-        } catch (te) {
-          thumbWarning = "⚠️ Miniature non appliquée (erreur réseau) : " + te.message;
-        }
-      } else {
-        thumbWarning = "ℹ️ Aucune miniature n'était en mémoire au moment de publier (thumbUrl vide). As-tu bien cliqué 'Générer la miniature' avant de publier ?";
-      }
+      // Note miniature : YouTube NE PERMET PAS d'appliquer une miniature
+      // personnalisée à un Short via l'API (réservé au Programme Partenaire +
+      // sélection manuelle d'une frame dans l'app mobile). Inutile donc de
+      // tenter l'upload : YouTube l'accepterait (200) puis l'écarterait. À la
+      // place, notre INTRO (le masque) est bakée sur les 1res frames de la vidéo,
+      // ce qui sert de couverture — c'est la stratégie "baked-in frame".
+      const thumbWarning = "ℹ️ Miniature : YouTube choisit une frame de la vidéo pour les Shorts (l'upload d'image custom est réservé au Programme Partenaire). Ton intro-masque sert de couverture. Pour la contrôler à 100 %, tu peux sélectionner la frame d'intro à la main dans l'app mobile YouTube.";
 
       setYtPublishedId(videoId);
       setYtUploadStatus(null);
@@ -610,6 +573,30 @@ export default function JarvisApp() {
       setYtUploadStatus(null);
     }
     setYtUploading(false);
+  };
+
+  // Récupère les stats par vidéo depuis une date (API YouTube Analytics).
+  const fetchAnalytics = async () => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const r = await fetch("/api/youtube-analytics", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: analyticsStart }),
+      });
+      const d = await r.json();
+      if (d.error) {
+        setAnalyticsError(d.needReconnect
+          ? "Accès aux statistiques non autorisé. Va dans Paramètres → Reconnecter (pour accorder la lecture des stats), puis réessaie."
+          : "Erreur : " + d.error);
+        setAnalytics(null);
+      } else {
+        setAnalytics(d);
+      }
+    } catch (e) {
+      setAnalyticsError("Erreur réseau : " + e.message);
+    }
+    setAnalyticsLoading(false);
   };
 
   // Vérifie l'état de connexion YouTube (OAuth).
@@ -892,6 +879,80 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                     <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{s.sub}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* ANALYTICS DU BATCH */}
+              <div style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)`, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    ◈ Performances des vidéos
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 10, color: T.muted, fontFamily: T.mono }}>depuis le</span>
+                    <input type="date" value={analyticsStart} onChange={e => setAnalyticsStart(e.target.value)}
+                      style={{ background: T.bg0, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 8px", color: T.text, fontSize: 12, fontFamily: T.mono, colorScheme: "dark", outline: "none" }} />
+                    <button onClick={fetchAnalytics} disabled={analyticsLoading} style={{
+                      padding: "6px 14px", background: analyticsLoading ? T.accentDim : T.accent, color: "#fff",
+                      border: "none", borderRadius: 6, cursor: analyticsLoading ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 700,
+                    }}>{analyticsLoading ? "Chargement…" : "Analyser"}</button>
+                  </div>
+                </div>
+
+                {analyticsError && (
+                  <div style={{ fontSize: 12, color: T.red, lineHeight: 1.6, padding: 10, background: `${T.red}11`, borderRadius: 8 }}>{analyticsError}</div>
+                )}
+
+                {analytics && analytics.summary && (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+                      {[
+                        { l: "Vidéos", v: analytics.summary.count },
+                        { l: "Vues totales", v: analytics.summary.totalViews },
+                        { l: "Rétention moy.", v: analytics.summary.avgRetention + "%" },
+                        { l: "Abonnés gagnés", v: (analytics.summary.totalSubs >= 0 ? "+" : "") + analytics.summary.totalSubs },
+                      ].map((s, i) => (
+                        <div key={i} style={{ background: T.glassSolid, borderRadius: 10, padding: 12 }}>
+                          <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 4 }}>{s.l}</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: T.accent, fontFamily: T.mono }}>{s.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {analytics.videos.length === 0 ? (
+                      <div style={{ fontSize: 12, color: T.muted }}>Aucune vidéo trouvée sur cette période.</div>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ color: T.muted, fontFamily: T.mono, textAlign: "left" }}>
+                              <th style={{ padding: "6px 8px" }}>Titre</th>
+                              <th style={{ padding: "6px 8px", textAlign: "right" }}>Vues</th>
+                              <th style={{ padding: "6px 8px", textAlign: "right" }}>Vue moy.</th>
+                              <th style={{ padding: "6px 8px", textAlign: "right" }}>Rétention</th>
+                              <th style={{ padding: "6px 8px", textAlign: "right" }}>Abonnés</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analytics.videos.map((v, i) => (
+                              <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
+                                <td style={{ padding: "8px", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</td>
+                                <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono, fontWeight: 700 }}>{v.views}</td>
+                                <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono }}>{v.avgViewDurationSec}s</td>
+                                <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono, color: v.avgViewPercentage >= 50 ? T.green : v.avgViewPercentage >= 30 ? T.blue : T.red }}>{v.avgViewPercentage}%</td>
+                                <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono }}>{v.subscribersGained > 0 ? "+" : ""}{v.subscribersGained}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!analytics && !analyticsError && !analyticsLoading && (
+                  <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.6 }}>
+                    Clique "Analyser" pour charger les performances de tes vidéos depuis la date choisie (vues, rétention, durée moyenne vue, abonnés gagnés). Nécessite d'avoir reconnecté YouTube après l'ajout de l'accès stats.
+                  </div>
+                )}
               </div>
 
               {/* MARKET INTEL */}
@@ -1303,7 +1364,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                           🚀 Publier automatiquement sur YouTube
                         </div>
                         <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.6, marginBottom: 12 }}>
-                          Envoie la vidéo sur ta chaîne en <strong style={{ color: T.text }}>privé</strong>, avec titre, description et miniature. Choisis quand elle sera publiée automatiquement (ou laisse vide pour décider plus tard dans Studio).
+                          Envoie la vidéo sur ta chaîne en <strong style={{ color: T.text }}>privé</strong>, avec titre et description. Choisis quand elle sera publiée automatiquement (ou laisse vide pour décider plus tard dans Studio). La couverture vient de ton intro-masque (les Shorts ne prennent pas de miniature custom via l'API).
                         </div>
 
                         <label style={{ fontSize: 10, fontFamily: T.mono, color: T.muted, display: "block", marginBottom: 6 }}>
