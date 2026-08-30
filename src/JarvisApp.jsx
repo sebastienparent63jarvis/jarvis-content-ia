@@ -138,6 +138,8 @@ export default function JarvisApp() {
   const [log, setLog] = useState([]);
   const [email, setEmail] = useState("");
   const [savedEmail, setSavedEmail] = useState("");
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState(null);
   const [youtubeKey, setYoutubeKey] = useState("");
   const [savedKey, setSavedKey] = useState("");
   const [contentType, setContentType] = useState("title");
@@ -573,6 +575,25 @@ export default function JarvisApp() {
       setYtUploadStatus(null);
     }
     setYtUploading(false);
+  };
+
+  // Envoie un mail de test via Resend (vérifie la brique email autonome).
+  const sendTestEmail = async () => {
+    setTestEmailSending(true);
+    setTestEmailResult(null);
+    try {
+      const r = await fetch("/api/send-email", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: savedEmail }),
+      });
+      const d = await r.json();
+      setTestEmailResult(d.ok
+        ? "✓ Mail envoyé ! Vérifie ta boîte (et les spams). S'il est là, la brique email fonctionne."
+        : "Échec : " + (d.error || "erreur inconnue"));
+    } catch (e) {
+      setTestEmailResult("Erreur réseau : " + e.message);
+    }
+    setTestEmailSending(false);
   };
 
   // Récupère les stats par vidéo depuis une date (API YouTube Analytics).
@@ -1719,6 +1740,24 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.green }} />
                     <span style={{ fontSize: 12, color: T.green, fontFamily: T.mono }}>Rapports activés → {savedEmail}</span>
+                  </div>
+                )}
+                {savedEmail && (
+                  <div style={{ marginTop: 14 }}>
+                    <button onClick={sendTestEmail} disabled={testEmailSending} style={{
+                      padding: "9px 16px", background: testEmailSending ? T.accentDim : "transparent",
+                      color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 8,
+                      cursor: testEmailSending ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 700,
+                    }}>
+                      {testEmailSending ? "Envoi…" : "📧 M'envoyer un mail de test"}
+                    </button>
+                    {testEmailResult && (
+                      <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6,
+                        color: /✓/.test(testEmailResult) ? T.green : T.red }}>{testEmailResult}</div>
+                    )}
+                    <div style={{ marginTop: 8, fontSize: 10, color: T.muted, lineHeight: 1.5 }}>
+                      Vérifie que l'envoi automatique marche (nécessite RESEND_API_KEY dans Netlify). Ce mail arrivera aussi sur ton iPhone via ta boîte mail.
+                    </div>
                   </div>
                 )}
               </div>
