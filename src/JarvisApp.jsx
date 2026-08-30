@@ -587,7 +587,7 @@ export default function JarvisApp() {
       const d = await r.json();
       if (d.error) {
         setAnalyticsError(d.needReconnect
-          ? "Accès aux statistiques non autorisé. Va dans Paramètres → Reconnecter (pour accorder la lecture des stats), puis réessaie."
+          ? "Accès aux statistiques non autorisé. Va dans Paramètres → Reconnecter (et accepte bien la lecture des stats sur l'écran Google), puis réessaie.\n\nErreur exacte de YouTube : " + d.error
           : "Erreur : " + d.error);
         setAnalytics(null);
       } else {
@@ -899,7 +899,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 </div>
 
                 {analyticsError && (
-                  <div style={{ fontSize: 12, color: T.red, lineHeight: 1.6, padding: 10, background: `${T.red}11`, borderRadius: 8 }}>{analyticsError}</div>
+                  <div style={{ fontSize: 12, color: T.red, lineHeight: 1.6, padding: 10, background: `${T.red}11`, borderRadius: 8, whiteSpace: "pre-line" }}>{analyticsError}</div>
                 )}
 
                 {analytics && analytics.summary && (
