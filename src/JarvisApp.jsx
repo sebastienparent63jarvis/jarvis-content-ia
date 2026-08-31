@@ -487,89 +487,73 @@ export default function JarvisApp() {
 
   // Upload direct navigateur → YouTube (évite de faire transiter le MP4 par nos
   // fonctions). Vidéo en PRIVÉ + date de publication planifiée (publishAt).
+  // Cœur d'upload réutilisable : publie une vidéo (privée + planifiée) sur
+  // YouTube. Utilisé par la publication manuelle ET par la validation autonome.
+  const publishItemToYouTube = async ({ videoUrl, title, description, publishAt }, onStatus) => {
+    const status = onStatus || (() => {});
+    status("Authentification YouTube…");
+    const tokRes = await fetch("/api/youtube-token", { method: "POST" });
+    const tokData = await tokRes.json();
+    if (!tokRes.ok) {
+      if (tokData.reason === "expired") throw new Error("Connexion YouTube expirée. Va dans Paramètres → Reconnecter.");
+      if (tokData.reason === "not_connected") throw new Error("YouTube non connecté. Va dans Paramètres → Connecter YouTube.");
+      throw new Error(tokData.error || "Impossible d'obtenir l'accès YouTube");
+    }
+    const accessToken = tokData.access_token;
+
+    status("Récupération de la vidéo…");
+    const vidResp = await fetch(videoUrl);
+    const videoBlob = await vidResp.blob();
+
+    const publishAtIso = publishAt ? new Date(publishAt).toISOString() : null;
+    const metadata = {
+      snippet: { title: (title || "Actu Crue").slice(0, 100), description: description || "", categoryId: "25" },
+      status: { privacyStatus: "private", selfDeclaredMadeForKids: false, ...(publishAtIso ? { publishAt: publishAtIso } : {}) },
+    };
+
+    status("Ouverture du transfert vers YouTube…");
+    const initRes = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json", "X-Upload-Content-Type": "video/mp4" },
+      body: JSON.stringify(metadata),
+    });
+    if (!initRes.ok) {
+      const errTxt = await initRes.text();
+      throw new Error("YouTube a refusé l'ouverture du transfert : " + errTxt.slice(0, 200));
+    }
+    const uploadUrl = initRes.headers.get("location");
+    if (!uploadUrl) throw new Error("YouTube n'a pas renvoyé d'URL de transfert");
+
+    status("Envoi de la vidéo à YouTube… (ne ferme pas l'app)");
+    const upRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": "video/mp4" }, body: videoBlob });
+    const upData = await upRes.json();
+    if (!upRes.ok) throw new Error("Échec de l'envoi : " + (upData.error?.message || "erreur inconnue"));
+
+    addToLog({
+      type: "PUBLICATION YOUTUBE",
+      decision: `Uploadée (privée) : "${title}"`,
+      rationale: publishAtIso ? `Publication planifiée : ${new Date(publishAtIso).toLocaleString("fr-FR")}` : "En privé, sans date",
+      kpi: "Phase 5 ✓",
+    });
+    return upData.id;
+  };
+
   const handlePublishYouTube = async () => {
     if (!videoUrl || !pipelineScript) return;
     setYtUploading(true);
     setYtUploadError(null);
     setYtPublishedId(null);
     try {
-      // 1. Jeton d'accès frais (le refresh_token reste côté serveur)
-      setYtUploadStatus("Authentification YouTube…");
-      const tokRes = await fetch("/api/youtube-token", { method: "POST" });
-      const tokData = await tokRes.json();
-      if (!tokRes.ok) {
-        if (tokData.reason === "expired") throw new Error("Connexion YouTube expirée. Va dans Paramètres → Reconnecter.");
-        if (tokData.reason === "not_connected") throw new Error("YouTube non connecté. Va dans Paramètres → Connecter YouTube.");
-        throw new Error(tokData.error || "Impossible d'obtenir l'accès YouTube");
-      }
-      const accessToken = tokData.access_token;
-
-      // 2. Récupère le MP4 (depuis Shotstack) en blob
-      setYtUploadStatus("Récupération de la vidéo…");
-      const vidResp = await fetch(videoUrl);
-      const videoBlob = await vidResp.blob();
-
-      // 3. Métadonnées. publishAt impose privacyStatus "private".
-      const publishAtIso = ytPublishAt ? new Date(ytPublishAt).toISOString() : null;
-      const metadata = {
-        snippet: {
-          title: (pipelineScript.title || "Actu Crue").slice(0, 100),
-          description: pipelineScript.description || "",
-          categoryId: "25", // News & Politics
-        },
-        status: {
-          privacyStatus: "private",
-          selfDeclaredMadeForKids: false,
-          ...(publishAtIso ? { publishAt: publishAtIso } : {}),
-        },
-      };
-
-      // 4. Démarre l'upload resumable (renvoie une URL d'upload dans Location)
-      setYtUploadStatus("Ouverture du transfert vers YouTube…");
-      const initRes = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "X-Upload-Content-Type": "video/mp4",
-        },
-        body: JSON.stringify(metadata),
-      });
-      if (!initRes.ok) {
-        const errTxt = await initRes.text();
-        throw new Error("YouTube a refusé l'ouverture du transfert : " + errTxt.slice(0, 200));
-      }
-      const uploadUrl = initRes.headers.get("location");
-      if (!uploadUrl) throw new Error("YouTube n'a pas renvoyé d'URL de transfert");
-
-      // 5. Envoie les octets de la vidéo
-      setYtUploadStatus("Envoi de la vidéo à YouTube… (ne ferme pas l'app)");
-      const upRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "video/mp4" },
-        body: videoBlob,
-      });
-      const upData = await upRes.json();
-      if (!upRes.ok) throw new Error("Échec de l'envoi : " + (upData.error?.message || "erreur inconnue"));
-      const videoId = upData.id;
-
-      // Note miniature : YouTube NE PERMET PAS d'appliquer une miniature
-      // personnalisée à un Short via l'API (réservé au Programme Partenaire +
-      // sélection manuelle d'une frame dans l'app mobile). Inutile donc de
-      // tenter l'upload : YouTube l'accepterait (200) puis l'écarterait. À la
-      // place, notre INTRO (le masque) est bakée sur les 1res frames de la vidéo,
-      // ce qui sert de couverture — c'est la stratégie "baked-in frame".
-      const thumbWarning = "ℹ️ Miniature : YouTube choisit une frame de la vidéo pour les Shorts (l'upload d'image custom est réservé au Programme Partenaire). Ton intro-masque sert de couverture. Pour la contrôler à 100 %, tu peux sélectionner la frame d'intro à la main dans l'app mobile YouTube.";
+      const videoId = await publishItemToYouTube({
+        videoUrl,
+        title: pipelineScript.title,
+        description: pipelineScript.description,
+        publishAt: ytPublishAt,
+      }, setYtUploadStatus);
 
       setYtPublishedId(videoId);
       setYtUploadStatus(null);
-      setYtThumbWarning(thumbWarning); // affiché DANS le bloc succès (visible)
-      addToLog({
-        type: "PUBLICATION YOUTUBE",
-        decision: `Uploadée (privée) : "${pipelineScript.title}"`,
-        rationale: publishAtIso ? `Publication planifiée : ${new Date(publishAtIso).toLocaleString("fr-FR")}` : "En privé, sans date (à publier manuellement)",
-        kpi: "Phase 5 ✓",
-      });
+      setYtThumbWarning("ℹ️ Miniature : YouTube choisit une frame de la vidéo pour les Shorts (upload custom réservé au Programme Partenaire). Ton intro-masque sert de couverture.");
     } catch (e) {
       setYtUploadError(e.message);
       setYtUploadStatus(null);
@@ -594,6 +578,60 @@ export default function JarvisApp() {
       setTestEmailResult("Erreur réseau : " + e.message);
     }
     setTestEmailSending(false);
+  };
+
+  // File d'attente de validation (vidéos autonomes en attente d'approbation).
+  const [validationItems, setValidationItems] = useState(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validationBusy, setValidationBusy] = useState(null); // id en cours
+
+  const loadValidationQueue = async () => {
+    setValidationLoading(true);
+    try {
+      const r = await fetch("/api/validation-queue", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list" }),
+      });
+      const d = await r.json();
+      setValidationItems(d.items || []);
+    } catch {
+      setValidationItems([]);
+    }
+    setValidationLoading(false);
+  };
+
+  const rejectValidation = async (id) => {
+    setValidationBusy(id);
+    try {
+      await fetch("/api/validation-queue", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "decide", id, decision: "rejected" }),
+      });
+      await loadValidationQueue();
+    } catch { /* ignore */ }
+    setValidationBusy(null);
+  };
+
+  // Approuver = publier sur YouTube (réutilise le flux d'upload) puis marquer validé.
+  const approveValidation = async (item) => {
+    setValidationBusy(item.id);
+    try {
+      await publishItemToYouTube({
+        videoUrl: item.videoUrl,
+        title: item.title,
+        description: item.description,
+        thumbUrl: item.thumbUrl,
+        publishAt: item.publishAt,
+      });
+      await fetch("/api/validation-queue", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "decide", id: item.id, decision: "approved" }),
+      });
+      await loadValidationQueue();
+    } catch (e) {
+      alert("Publication échouée : " + e.message);
+    }
+    setValidationBusy(null);
   };
 
   // Récupère les stats par vidéo depuis une date (API YouTube Analytics).
@@ -842,12 +880,13 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
           {[
             { id: "dashboard", icon: "⬡", label: "Dashboard" },
             { id: "pipeline", icon: "▶", label: "Pipeline Shorts" },
+            { id: "validation", icon: "✓", label: "À valider" },
             { id: "generate", icon: "✦", label: "Générer" },
             { id: "history", icon: "◪", label: "Historique" },
             { id: "report", icon: "◈", label: `Journal (${log.length})` },
             { id: "settings", icon: "◎", label: "Paramètres" },
           ].map(item => (
-            <button key={item.id} onClick={() => { setView(item.id); if (item.id === "history") loadHistory(); }} style={{
+            <button key={item.id} onClick={() => { setView(item.id); if (item.id === "history") loadHistory(); if (item.id === "validation") loadValidationQueue(); }} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 20px",
               background: view === item.id ? `linear-gradient(90deg, ${T.accentGlow}, transparent)` : "transparent",
               color: view === item.id ? "#fff" : T.muted,
@@ -1005,6 +1044,64 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                   3. Chaque décision est automatiquement loguée dans le <strong style={{ color: T.text }}>Journal</strong>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── À VALIDER (file d'attente autonome) ── */}
+          {view === "validation" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800 }}>À valider</h2>
+                <button onClick={loadValidationQueue} disabled={validationLoading} style={{
+                  padding: "7px 14px", background: "transparent", border: `1px solid ${T.border}`,
+                  borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: T.mono, color: T.muted,
+                }}>{validationLoading ? "…" : "Rafraîchir"}</button>
+              </div>
+              <p style={{ fontSize: 13, color: T.muted, marginBottom: 20 }}>
+                Les vidéos produites automatiquement t'attendent ici. Prévisualise, puis publie (privé + planifié) ou rejette.
+              </p>
+
+              {validationLoading && !validationItems && (
+                <div style={{ fontSize: 13, color: T.muted }}>Chargement…</div>
+              )}
+
+              {validationItems && validationItems.length === 0 && (
+                <div style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 32, textAlign: "center" }}>
+                  <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.7 }}>
+                    Aucune vidéo en attente. Quand le pipeline autonome tournera, tes vidéos du jour apparaîtront ici pour validation.
+                  </div>
+                </div>
+              )}
+
+              {validationItems && validationItems.map(item => (
+                <div key={item.id} style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)` }}>
+                  <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+                    {item.videoUrl && (
+                      <video controls src={item.videoUrl} style={{ width: 200, borderRadius: 10, background: "#000" }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 220 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, lineHeight: 1.3 }}>{item.title || "(sans titre)"}</div>
+                      {item.description && (
+                        <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.6, marginBottom: 10, maxHeight: 90, overflow: "hidden" }}>{item.description}</div>
+                      )}
+                      <div style={{ fontSize: 11, fontFamily: T.mono, color: T.muted, marginBottom: 14 }}>
+                        {item.publishAt ? `Publication prévue : ${new Date(item.publishAt).toLocaleString("fr-FR")}` : "Sans date de publication"}
+                        {item.createdAt ? ` · créée le ${new Date(item.createdAt).toLocaleDateString("fr-FR")}` : ""}
+                      </div>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <button onClick={() => approveValidation(item)} disabled={validationBusy === item.id} style={{
+                          padding: "10px 20px", background: validationBusy === item.id ? T.accentDim : T.accent, color: "#fff",
+                          border: "none", borderRadius: 8, cursor: validationBusy === item.id ? "not-allowed" : "pointer", fontWeight: 800, fontSize: 13,
+                        }}>{validationBusy === item.id ? "Publication…" : "✓ Valider et publier"}</button>
+                        <button onClick={() => rejectValidation(item.id)} disabled={validationBusy === item.id} style={{
+                          padding: "10px 20px", background: "transparent", color: T.red,
+                          border: `1px solid ${T.red}55`, borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13,
+                        }}>Rejeter</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
