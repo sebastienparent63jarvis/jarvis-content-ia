@@ -170,3 +170,102 @@ export async function runProductionStep(jobId, base) {
 function estimateDurationFromChars(text) {
   return Math.max(1.5, Math.round(((text || "").length / 15) * 10) / 10);
 }
+
+// TEMPS B : parcourt les jobs "rendering", vérifie si leur montage Shotstack est
+// terminé ; pour chaque vidéo prête, la range dans la file de VALIDATION et
+// envoie le MAIL de notification. Renvoie un résumé de ce qui a été traité.
+export async function runCollectStep(base) {
+  const jobStore = openStore("jarvis-auto-jobs");
+  const idx = (await jobStore.get("_index", { type: "json" })) || [];
+  const env = process.env.SHOTSTACK_ENV || "stage";
+  const apiKey = process.env.SHOTSTACK_API_KEY;
+  const notifyEmail = process.env.NOTIFY_EMAIL || null;
+
+  const processed = [];
+  for (const jobId of idx.slice(0, 30)) {
+    let job;
+    try { job = await jobStore.get(jobId, { type: "json" }); } catch { continue; }
+    if (!job || job.status !== "rendering" || !job.renderId) continue;
+
+    // Vérifie l'état du rendu Shotstack.
+    let videoUrl = null;
+    try {
+      const r = await fetch(`https://api.shotstack.io/${env}/render/${job.renderId}`, {
+        headers: { "x-api-key": apiKey },
+      });
+      const d = await r.json();
+      const st = d.response?.status;
+      if (st === "done") videoUrl = d.response?.url;
+      else if (st === "failed") {
+        job.status = "error"; job.error = "montage Shotstack échoué";
+        await jobStore.set(jobId, JSON.stringify(job));
+        processed.push({ jobId, result: "render_failed" });
+        continue;
+      } else {
+        // encore en cours (queued/rendering) → on laisse pour le prochain passage
+        continue;
+      }
+    } catch (e) {
+      continue; // on retentera au prochain passage
+    }
+
+    if (!videoUrl) continue;
+
+    // Range dans la file de validation.
+    try {
+      await fetch(`${base}/api/validation-queue`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add",
+          item: {
+            title: job.script?.title || "Actu Crue",
+            description: job.script?.description || "",
+            videoUrl,
+            publishAt: job.publishAt,
+            slot: job.slot,
+            sourceJobId: jobId,
+          },
+        }),
+      });
+    } catch (e) {
+      processed.push({ jobId, result: "queue_error: " + e.message });
+      continue;
+    }
+
+    // Marque le job comme terminé (mis en file).
+    job.status = "queued_for_validation";
+    job.videoUrl = videoUrl;
+    job.updatedAt = new Date().toISOString();
+    await jobStore.set(jobId, JSON.stringify(job));
+
+    // Envoie le mail de notification (si une adresse est configurée).
+    if (notifyEmail) {
+      try {
+        const publishStr = job.publishAt
+          ? new Date(job.publishAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+          : "à définir";
+        await fetch(`${base}/api/send-email`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: notifyEmail,
+            subject: `Actu Crue — vidéo à valider : ${job.script?.title || ""}`.slice(0, 120),
+            html: `<div style="font-family:system-ui,sans-serif;max-width:520px">
+              <h2 style="color:#7D4698">Ta vidéo du jour est prête</h2>
+              <p style="font-size:16px;font-weight:600">${escapeHtmlLite(job.script?.title || "")}</p>
+              <p style="color:#555;line-height:1.6">Elle t'attend dans l'onglet <b>À valider</b> de l'app. Publie-la (privé + planifié pour le ${publishStr}) ou rejette-la.</p>
+              <p><a href="${base}/" style="display:inline-block;background:#7D4698;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Ouvrir Actu Crue →</a></p>
+            </div>`,
+          }),
+        });
+      } catch { /* mail best-effort */ }
+    }
+
+    processed.push({ jobId, result: "queued", title: job.script?.title, videoUrl });
+  }
+
+  return { ok: true, processedCount: processed.length, processed, notifyEmail: !!notifyEmail };
+}
+
+function escapeHtmlLite(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
