@@ -92,3 +92,81 @@ export async function runScriptStep(slot) {
 
   return { ok: true, step: "script_done", jobId, title: script.title, publishAt };
 }
+
+// TEMPS A : à partir d'un job "script_done", enchaîne voix (par segment) →
+// visuels Pexels → images de marque (HCTI) → LANCEMENT du montage Shotstack.
+// Réutilise les endpoints existants (logique testée) via HTTP interne. Le montage
+// étant asynchrone, on stocke le render_id ; le Temps B récupérera la vidéo finie.
+// `base` = origine du site (ex https://xxx.netlify.app), pour les appels internes.
+export async function runProductionStep(jobId, base) {
+  const jobStore = openStore("jarvis-auto-jobs");
+  const job = await jobStore.get(jobId, { type: "json" });
+  if (!job) return { error: "job introuvable" };
+  const script = job.script;
+  const segments = script.narration_segments || [];
+  if (segments.length === 0) return { error: "script sans segments" };
+
+  const post = async (path, body) => {
+    const r = await fetch(`${base}${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const txt = await r.text();
+    let d; try { d = JSON.parse(txt); } catch { throw new Error(`${path} → réponse non JSON (${r.status})`); }
+    if (!r.ok) throw new Error(`${path} → ${d.error || r.status}`);
+    return d;
+  };
+
+  try {
+    // 1. VOIX segment par segment (durées réelles pour la synchro).
+    const audioSegments = [];
+    for (let i = 0; i < segments.length; i++) {
+      const a = await post("/api/generate-audio", { text: segments[i].text });
+      // Héberge le segment audio (URL publique pour Shotstack).
+      const h = await post("/api/store-audio", { audio_base64: a.audio_base64 });
+      audioSegments.push({ index: i, url: h.url, duration: estimateDurationFromChars(segments[i].text) });
+    }
+
+    // 2. VISUELS Pexels.
+    const vis = await post("/api/fetch-visuals", { segments });
+    const clips = vis.clips || [];
+    const firstPreview = clips.find(c => c.clip && c.clip.preview);
+
+    // 3. IMAGES DE MARQUE (intro incrustée sur 1re image Pexels + outro).
+    let introMaskUrl = null, outroImgUrl = null;
+    try {
+      const bi = await post("/api/generate-brand-images", {
+        title: script.title, category: script.category, word: script.thumbnail_word,
+        bgImage: firstPreview ? firstPreview.clip.preview : undefined,
+      });
+      introMaskUrl = bi.introMaskUrl; outroImgUrl = bi.outroImgUrl;
+    } catch { /* on continue sans intro/outro plutôt que bloquer */ }
+
+    // 4. LANCE le montage Shotstack (asynchrone → on récupère un render_id).
+    const asm = await post("/api/assemble-video", {
+      audioSegments, segments, clips,
+      title: script.title, category: script.category, word: script.thumbnail_word,
+      introMaskUrl, outroImgUrl,
+    });
+    const renderId = asm.render_id;
+    if (!renderId) throw new Error("assemble-video n'a pas renvoyé de render_id");
+
+    // 5. Met à jour le job : montage lancé, en attente du rendu (Temps B).
+    job.status = "rendering";
+    job.renderId = renderId;
+    job.renderEnv = asm.env || "stage";
+    job.audioSegments = audioSegments;
+    job.updatedAt = new Date().toISOString();
+    await jobStore.set(jobId, JSON.stringify(job));
+
+    return { ok: true, step: "rendering", jobId, renderId, title: script.title };
+  } catch (e) {
+    job.status = "error"; job.error = e.message; job.updatedAt = new Date().toISOString();
+    await jobStore.set(jobId, JSON.stringify(job));
+    return { error: e.message, jobId };
+  }
+}
+
+// Estimation de durée (s) d'un segment à partir du nb de caractères (~15 c/s FR).
+function estimateDurationFromChars(text) {
+  return Math.max(1.5, Math.round(((text || "").length / 15) * 10) / 10);
+}
