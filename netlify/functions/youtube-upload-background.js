@@ -62,8 +62,12 @@ export default async (req) => {
 
     // 3. Métadonnées (privé + planifié).
     const publishAtIso = (publishAtOverride || item.publishAt) ? new Date(publishAtOverride || item.publishAt).toISOString() : null;
+    // On garantit la présence de #Shorts dans la description (fiabilise le
+    // classement en Short pour les uploads via l'API YouTube).
+    const baseDesc = item.description || "";
+    const descWithTag = /#shorts/i.test(baseDesc) ? baseDesc : (baseDesc ? baseDesc + "\n\n#Shorts" : "#Shorts");
     const metadata = {
-      snippet: { title: (item.title || "Actu Crue").slice(0, 100), description: item.description || "", categoryId: "25" },
+      snippet: { title: (item.title || "Actu Crue").slice(0, 100), description: descWithTag, categoryId: "25" },
       status: { privacyStatus: "private", selfDeclaredMadeForKids: false, ...(publishAtIso ? { publishAt: publishAtIso } : {}) },
     };
 

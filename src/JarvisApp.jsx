@@ -511,8 +511,10 @@ export default function JarvisApp() {
     const videoBlob = await vidResp.blob();
 
     const publishAtIso = publishAt ? new Date(publishAt).toISOString() : null;
+    const baseDesc = description || "";
+    const descWithTag = /#shorts/i.test(baseDesc) ? baseDesc : (baseDesc ? baseDesc + "\n\n#Shorts" : "#Shorts");
     const metadata = {
-      snippet: { title: (title || "Actu Crue").slice(0, 100), description: description || "", categoryId: "25" },
+      snippet: { title: (title || "Actu Crue").slice(0, 100), description: descWithTag, categoryId: "25" },
       status: { privacyStatus: "private", selfDeclaredMadeForKids: false, ...(publishAtIso ? { publishAt: publishAtIso } : {}) },
     };
 
