@@ -46,6 +46,27 @@ export function computePublishNextDay(hour, min) {
   return next.toISOString();
 }
 
+// MODE MANUEL : prochain créneau (8h30 / 12h30 / 19h30) encore disponible
+// AUJOURD'HUI en heure de Paris. Renvoie l'ISO du créneau, ou null s'il n'y a
+// plus de créneau aujourd'hui (après 19h30) → l'utilisateur choisira la date.
+export function computeNextSlotToday() {
+  const SLOTS = [{ h: 8, m: 30 }, { h: 12, m: 30 }, { h: 19, m: 30 }];
+  const { h, m } = parisNow();
+  const nowMin = h * 60 + m;
+  // On garde une petite marge (2 min) pour éviter de viser un créneau qui vient
+  // juste de passer et serait déjà "dans le passé" pour YouTube.
+  const slot = SLOTS.find(s => (s.h * 60 + s.m) > nowMin + 2);
+  if (!slot) return null; // plus de créneau aujourd'hui
+
+  const now = new Date();
+  const parisDateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, mo, d] = parisDateStr.split("-").map(Number);
+  const target = new Date(Date.UTC(y, mo - 1, d, slot.h, slot.m));
+  const offsetMin = parisOffsetMinutes(target);
+  target.setUTCMinutes(target.getUTCMinutes() - offsetMin);
+  return target.toISOString();
+}
+
 // Produit le SCRIPT du jour et range un job. `slot` = { hour, min }.
 // Renvoie { ok, jobId, title, publishAt } ou { error }.
 export async function runScriptStep(slot, opts = {}) {
@@ -82,10 +103,11 @@ export async function runScriptStep(slot, opts = {}) {
   try { script = extractScript(textPart); }
   catch { return { error: "Script non conforme (JSON)" }; }
 
-  // Range le job. publishAt : soit imposé (opts.publishAt), soit J+1 au créneau.
+  // Range le job. publishAt : si la clé est explicitement fournie dans opts (même
+  // null), on la respecte ; sinon (autonome), on planifie J+1 au créneau.
   const jobStore = openStore("jarvis-auto-jobs");
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const publishAt = opts.publishAt || computePublishNextDay(slot.hour, slot.min);
+  const publishAt = ("publishAt" in opts) ? opts.publishAt : computePublishNextDay(slot.hour, slot.min);
   const job = {
     id: jobId, status: "script_done", createdAt: new Date().toISOString(),
     slot: opts.topic ? "manuel" : `${slot.hour}:${String(slot.min).padStart(2, "0")}`, publishAt, script,

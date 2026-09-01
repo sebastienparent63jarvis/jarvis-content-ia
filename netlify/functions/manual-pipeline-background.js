@@ -5,7 +5,7 @@
 //
 // Corps : { topic, angle } (angle optionnel, comme la recherche d'actu)
 
-import { runScriptStep, runProductionStep, openStore } from "./_auto-core.js";
+import { runScriptStep, runProductionStep, openStore, computeNextSlotToday } from "./_auto-core.js";
 
 export default async (req) => {
   const runId = `manual-${Date.now()}`;
@@ -25,9 +25,13 @@ export default async (req) => {
 
   await mark({ status: "running", step: "script", topic });
 
-  // 1. Script à partir du sujet imposé. Pas de créneau (publication : à définir
-  //    par l'utilisateur au moment de valider, ou J+1 par défaut).
-  const s = await runScriptStep({ hour: 8, min: 30 }, { topic, newsTheme: topic });
+  // MODE MANUEL : planifie au prochain créneau disponible AUJOURD'HUI (8h30 /
+  // 12h30 / 19h30). Après 19h30 → null : l'utilisateur choisira la date dans
+  // « À valider ».
+  const publishAt = computeNextSlotToday(); // ISO ou null
+
+  // 1. Script à partir du sujet imposé.
+  const s = await runScriptStep({ hour: 8, min: 30 }, { topic, newsTheme: topic, publishAt });
   if (!s.ok) { await mark({ status: "done", result: s }); return accepted(runId); }
 
   await mark({ status: "running", step: "production", jobId: s.jobId, title: s.title });

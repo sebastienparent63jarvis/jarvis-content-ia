@@ -28,6 +28,7 @@ export default async (req) => {
   const base = new URL(req.url).origin;
   let body; try { body = await req.json(); } catch { body = {}; }
   const id = body.id;
+  const publishAtOverride = body.publishAtOverride || null;
   if (!id) {
     return new Response(JSON.stringify({ error: "id manquant" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
@@ -60,7 +61,7 @@ export default async (req) => {
     const videoBuf = Buffer.from(await vidResp.arrayBuffer());
 
     // 3. Métadonnées (privé + planifié).
-    const publishAtIso = item.publishAt ? new Date(item.publishAt).toISOString() : null;
+    const publishAtIso = (publishAtOverride || item.publishAt) ? new Date(publishAtOverride || item.publishAt).toISOString() : null;
     const metadata = {
       snippet: { title: (item.title || "Actu Crue").slice(0, 100), description: item.description || "", categoryId: "25" },
       status: { privacyStatus: "private", selfDeclaredMadeForKids: false, ...(publishAtIso ? { publishAt: publishAtIso } : {}) },
