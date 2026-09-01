@@ -612,21 +612,29 @@ export default function JarvisApp() {
     setValidationBusy(null);
   };
 
-  // Approuver = publier sur YouTube (réutilise le flux d'upload) puis marquer validé.
+  // Approuver = upload SERVEUR (background) : le serveur télécharge la vidéo
+  // (pas de CORS) et l'envoie à YouTube. On déclenche puis on sonde le statut.
   const approveValidation = async (item) => {
     setValidationBusy(item.id);
     try {
-      await publishItemToYouTube({
-        videoUrl: item.videoUrl,
-        title: item.title,
-        description: item.description,
-        thumbUrl: item.thumbUrl,
-        publishAt: item.publishAt,
-      });
-      await fetch("/api/validation-queue", {
+      await fetch("/.netlify/functions/youtube-upload-background", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "decide", id: item.id, decision: "approved" }),
+        body: JSON.stringify({ id: item.id }),
       });
+      // Sonde le statut jusqu'à done/error (max ~3 min).
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      let final = null;
+      for (let i = 0; i < 36; i++) {
+        await sleep(5000);
+        try {
+          const r = await fetch(`/api/youtube-upload-status?id=${encodeURIComponent(item.id)}`);
+          const d = await r.json();
+          if (d.status === "done") { final = d; break; }
+          if (d.status === "error") throw new Error(d.error || "upload échoué");
+        } catch (e) { if (/upload échoué/.test(e.message)) throw e; }
+      }
+      if (!final) throw new Error("délai d'upload dépassé — réessaie ou vérifie YouTube Studio");
+      addToLog({ type: "PUBLICATION YOUTUBE", decision: `Publiée (auto) : "${item.title}"`, rationale: "Upload serveur, privé + planifié", kpi: "Auto ✓" });
       await loadValidationQueue();
     } catch (e) {
       alert("Publication échouée : " + e.message);
