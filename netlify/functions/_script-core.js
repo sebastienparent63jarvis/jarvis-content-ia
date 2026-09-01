@@ -65,11 +65,17 @@ Règles de forme :
 6. IMPORTANT pour la voix off : dans le champ "text" de narration, écris TOUS les nombres, montants et pourcentages EN TOUTES LETTRES (ex: "mille cinq cents euros" et non "1500€", "vingt-cinq pour cent" et non "25%", "dix mille" et non "10k"). N'utilise aucun symbole (€, %, $, k) dans le texte de narration — ils sont mal lus par la synthèse vocale. Tu peux les garder en chiffres dans le titre et la description (qui sont affichés, pas lus).
 7. ÉVITE les homographes ambigus qui trompent la synthèse vocale — surtout les verbes qui s'écrivent comme un nom courant. Exemples à reformuler : "tu paramètres" (verbe) → préfère "tu programmes" ou "tu règles" ; "tu places" → "tu investis" ; "ils content" → "ils racontent". Si un mot peut se lire comme deux natures grammaticales différentes (nom/verbe), choisis un synonyme sans ambiguïté.
 8. Pour chaque segment, propose 2-3 mots-clés en ANGLAIS pour rechercher des visuels libres de droits.
-   REGISTRE VISUEL — important : le TEXTE doit rester accessible et grand public, mais les VISUELS doivent être sérieux, élégants et professionnels (esthétique premium, crédible, type chaîne finance haut de gamme). Pour cela, oriente les mots-clés visuels vers ce registre :
-   - PRIVILÉGIE : "professional businesswoman laptop", "modern office finance", "stock market screen", "elegant minimal workspace", "financial charts monitor", "person reviewing documents", "city skyline business district", "luxury minimal interior", "handshake meeting", "calm professional working"
-   - ÉVITE : les visuels caricaturaux, kitsch ou "stock cliché" (piles de pièces, billets qui pleuvent, cochons-tirelires, mains tenant des liasses, flèches dessinées). Ils décrédibilisent.
-   - Ajoute si pertinent un mot d'ambiance pro : "cinematic", "clean", "modern", "professional" pour relever la qualité visuelle.
-   Les mots-clés doivent rester concrets et faciles à trouver sur une banque d'images (pas de concepts abstraits comme "financial freedom" qui ne donnent rien de visuel).
+   REGISTRE VISUEL — RÈGLES IMPÉRATIVES pour des images pertinentes et variées :
+   - Les visual_keywords doivent être EN ANGLAIS (la banque d'images est anglophone : des mots-clés français ne donnent rien de bon).
+   - Ils doivent être CONCRETS et FILMABLES : une banque d'images ne contient JAMAIS de concept abstrait ("debt", "geopolitics", "inflation", "sovereignty" ne donnent rien). Traduis l'idée abstraite en LIEUX, OBJETS ou SCÈNES réels qui l'évoquent.
+     · "dette américaine" → "US Capitol building", "Federal Reserve building", "Wall Street trading floor", "dollar bills close up"
+     · "tensions Inde-Pakistan" → "military soldiers border", "fighter jet sky", "diplomatic flags meeting", "crowded street India"
+     · "pétrole / énergie" → "oil refinery night", "gas station pump", "oil pipeline desert", "tanker ship sea"
+     · "IA / tech" → "server data center", "robot arm factory", "person coding screens", "microchip macro"
+   - Chaque segment doit avoir des mots-clés DIFFÉRENTS des autres segments : varie les plans (lieux, gros plans, foule, machines, nature) pour que la vidéo ne montre pas 10 fois la même chose. Pense comme un monteur qui illustre un reportage.
+   - Ajoute un mot d'ambiance cinéma quand utile : "cinematic", "aerial", "slow motion", "night", "close up".
+   - ÉVITE absolument les clichés génériques passe-partout ("modern office", "business handshake", "city skyline" à toutes les sauces) SAUF s'ils collent vraiment au sujet. Le but est que l'image ÉVOQUE le sujet précis, pas qu'elle remplisse le cadre.
+   - Donne 2 à 3 visual_keywords par segment, du plus spécifique au plus général (pour maximiser les chances de trouver ET garder la pertinence).
 
 Réponds UNIQUEMENT en JSON valide, structure exacte :
 {

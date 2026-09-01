@@ -51,24 +51,24 @@ export default async (req, context) => {
 
   try {
     const results = [];
+    const usedIds = new Set(); // évite de réutiliser le même clip dans une vidéo
 
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
       const keywords = Array.isArray(seg.visual_keywords) ? seg.visual_keywords : [];
-      const query = keywords.join(" ") || "finance money";
+      const query = keywords.join(" ") || (keywords[0] || "");
 
       let clip = null;
       let usedQuery = query;
 
-      // On tente la requête complète, puis on dégrade vers le premier mot-clé
-      // si aucun résultat, pour maximiser les chances de trouver un visuel.
-      // Le dernier recours reste dans un registre pro (pas de cliché finance).
-      const proFallbacks = ["modern office professional", "business workspace cinematic", "city skyline business"];
-      const lastResort = proFallbacks[Math.floor(Math.random() * proFallbacks.length)];
-      const attempts = [query, keywords[0], lastResort].filter(Boolean);
+      // Tentatives : requête complète → chaque mot-clé séparément. PAS de
+      // fallback "bureau/ville" générique (source de la répétition). En dernier
+      // recours seulement, un plan d'ambiance neutre lié à l'actu.
+      const attempts = [query, ...keywords, "world news broadcast", "documentary aerial city"].filter(Boolean);
 
       for (const attempt of attempts) {
-        const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(attempt)}&orientation=portrait&per_page=5`;
+        // per_page plus large (15) pour avoir un vrai choix et diversifier.
+        const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(attempt)}&orientation=portrait&per_page=15`;
         const res = await fetch(url, { headers: { Authorization: apiKey } });
 
         if (!res.ok) {
@@ -83,12 +83,15 @@ export default async (req, context) => {
 
         const data = await res.json();
         const videos = data.videos || [];
-        if (videos.length > 0) {
-          // Prend une vidéo au hasard parmi les premiers résultats pour éviter
-          // que tous les Shorts utilisent exactement le même clip.
-          const chosen = videos[Math.floor(Math.random() * Math.min(videos.length, 5))];
+        // On filtre les clips déjà utilisés dans cette vidéo pour ne pas répéter.
+        const fresh = videos.filter((v) => !usedIds.has(v.id));
+        const pool = fresh.length > 0 ? fresh : videos;
+        if (pool.length > 0) {
+          // Choix aléatoire dans un pool large (jusqu'à 15) → vraie diversité.
+          const chosen = pool[Math.floor(Math.random() * pool.length)];
           const file = pickBestVideoFile(chosen.video_files);
           if (file) {
+            usedIds.add(chosen.id);
             clip = {
               pexels_id: chosen.id,
               duration: chosen.duration,
