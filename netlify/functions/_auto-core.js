@@ -48,7 +48,7 @@ export function computePublishNextDay(hour, min) {
 
 // Produit le SCRIPT du jour et range un job. `slot` = { hour, min }.
 // Renvoie { ok, jobId, title, publishAt } ou { error }.
-export async function runScriptStep(slot) {
+export async function runScriptStep(slot, opts = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "ANTHROPIC_API_KEY manquante" };
 
@@ -63,8 +63,13 @@ export async function runScriptStep(slot) {
     }
   } catch { /* historique vide, pas grave */ }
 
-  // Génère le script (le modèle choisit le sujet d'actu du jour).
-  const userPrompt = buildUserPrompt({ recentTopics });
+  // Génère le script. En manuel, un sujet/thème peut être IMPOSÉ (opts.topic).
+  // Sinon (autonome), le modèle choisit lui-même le sujet d'actu du jour.
+  const userPrompt = buildUserPrompt({
+    recentTopics,
+    topic: opts.topic || undefined,
+    newsTheme: opts.newsTheme || undefined,
+  });
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
@@ -77,13 +82,13 @@ export async function runScriptStep(slot) {
   try { script = extractScript(textPart); }
   catch { return { error: "Script non conforme (JSON)" }; }
 
-  // Range le job.
+  // Range le job. publishAt : soit imposé (opts.publishAt), soit J+1 au créneau.
   const jobStore = openStore("jarvis-auto-jobs");
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const publishAt = computePublishNextDay(slot.hour, slot.min);
+  const publishAt = opts.publishAt || computePublishNextDay(slot.hour, slot.min);
   const job = {
     id: jobId, status: "script_done", createdAt: new Date().toISOString(),
-    slot: `${slot.hour}:${String(slot.min).padStart(2, "0")}`, publishAt, script,
+    slot: opts.topic ? "manuel" : `${slot.hour}:${String(slot.min).padStart(2, "0")}`, publishAt, script,
   };
   await jobStore.set(jobId, JSON.stringify(job));
   const jIdx = (await jobStore.get("_index", { type: "json" })) || [];

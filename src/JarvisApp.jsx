@@ -150,6 +150,11 @@ export default function JarvisApp() {
 
   // Pipeline Shorts (Phase 1)
   const [pipelineNews, setPipelineNews] = useState(""); // thème d'actualité optionnel
+  const [fastTopic, setFastTopic] = useState("");
+  const [fastAngle, setFastAngle] = useState("");
+  const [fastLoading, setFastLoading] = useState(false);
+  const [fastLaunched, setFastLaunched] = useState(false);
+  const [fastError, setFastError] = useState(null);
   const [newsAngle, setNewsAngle] = useState(""); // angle éditorial imposé (vide = tous angles)
   const [newsTopics, setNewsTopics] = useState(null); // sujets d'actu proposés
   const [newsLoading, setNewsLoading] = useState(false);
@@ -578,6 +583,32 @@ export default function JarvisApp() {
       setTestEmailResult("Erreur réseau : " + e.message);
     }
     setTestEmailSending(false);
+  };
+
+  // Mode rapide : lance la chaîne complète en fond depuis un sujet imposé.
+  const launchFastPipeline = async () => {
+    if (!fastTopic.trim()) return;
+    setFastLoading(true);
+    setFastError(null);
+    const angleLabels = { finance: "angle finance / pouvoir d'achat", environnement: "angle environnement / climat", geopolitique: "angle géopolitique / conflits", tech: "angle tech / science / santé" };
+    const topic = fastAngle && angleLabels[fastAngle]
+      ? `${fastTopic.trim()} — traiter sous l'${angleLabels[fastAngle]}`
+      : fastTopic.trim();
+    try {
+      const r = await fetch("/.netlify/functions/manual-pipeline-background", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic }),
+      });
+      if (!r.ok && r.status !== 202) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${r.status}`);
+      }
+      setFastLaunched(true);
+      addToLog({ type: "PIPELINE RAPIDE", decision: `Lancé : "${fastTopic.trim()}"`, rationale: "Chaîne complète en fond → À valider", kpi: "⚡" });
+    } catch (e) {
+      setFastError("Lancement échoué : " + e.message);
+    }
+    setFastLoading(false);
   };
 
   // File d'attente de validation (vidéos autonomes en attente d'approbation).
@@ -1117,9 +1148,59 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
           {view === "pipeline" && (
             <div>
               <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Pipeline vidéo</h2>
-              <p style={{ color: T.muted, fontSize: 13, marginBottom: 24 }}>
-                Génération du script structuré (audio + visuels + métadonnées). Phases suivantes : voix off, visuels stock, montage, publication.
+              <p style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>
+                Deux façons de produire : le <b style={{ color: T.text }}>mode rapide</b> (un clic, tout s'enchaîne en fond, tu valides à la fin) ou le mode manuel étape par étape ci-dessous.
               </p>
+
+              {/* MODE RAPIDE — chaîne complète en un clic */}
+              <div style={{ marginBottom: 24, padding: 18, background: `${T.accent}11`, border: `1px solid ${T.accent}55`, borderRadius: 14 }}>
+                <div style={{ fontSize: 12, fontFamily: T.mono, color: T.accent, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  ⚡ Mode rapide — un seul clic
+                </div>
+                <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.6, marginBottom: 12 }}>
+                  Donne ton sujet, choisis l'angle, et tout s'enchaîne automatiquement (script, voix, visuels, montage). La vidéo finie arrivera dans l'onglet <b style={{ color: T.text }}>« À valider »</b> et tu recevras un mail. Pas besoin de rester devant.
+                </div>
+                <input
+                  value={fastTopic}
+                  onChange={e => setFastTopic(e.target.value)}
+                  placeholder="Ton sujet (ex: la dette américaine, tensions Iran-Israël…)"
+                  style={{ width: "100%", background: T.bg0, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 14px", color: T.text, fontSize: 14, fontFamily: T.sans, boxSizing: "border-box", outline: "none", marginBottom: 12 }}
+                />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+                  {[
+                    { id: "", label: "Angle auto" },
+                    { id: "finance", label: "💰 Finance" },
+                    { id: "environnement", label: "🌍 Environnement" },
+                    { id: "geopolitique", label: "⚔️ Géopolitique" },
+                    { id: "tech", label: "🔬 Tech/Science/Santé" },
+                  ].map(a => (
+                    <button key={a.id} onClick={() => setFastAngle(a.id)} style={{
+                      padding: "6px 12px", background: fastAngle === a.id ? `linear-gradient(90deg, ${T.accentGlow}, ${T.accentDim})` : T.glassSolid,
+                      color: fastAngle === a.id ? "#fff" : T.muted, border: `1px solid ${fastAngle === a.id ? T.accent : T.border}`,
+                      borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: fastAngle === a.id ? 700 : 500,
+                    }}>{a.label}</button>
+                  ))}
+                </div>
+                {fastLaunched ? (
+                  <div style={{ padding: 14, background: `${T.green}18`, border: `1px solid ${T.green}55`, borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, color: T.green, fontWeight: 700, marginBottom: 4 }}>✓ C'est lancé !</div>
+                    <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.6 }}>
+                      La vidéo se fabrique en fond (compte 2-4 min). Elle apparaîtra dans <b style={{ color: T.text }}>« À valider »</b> et tu recevras un mail. Tu peux fermer l'app.
+                    </div>
+                    <button onClick={() => { setFastLaunched(false); setFastTopic(""); }} style={{ marginTop: 10, padding: "6px 12px", background: "transparent", border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 11, color: T.muted }}>Lancer un autre sujet</button>
+                  </div>
+                ) : (
+                  <button onClick={launchFastPipeline} disabled={fastLoading || !fastTopic.trim()} style={{
+                    width: "100%", padding: "13px", background: (fastLoading || !fastTopic.trim()) ? T.accentDim : T.accent,
+                    color: "#fff", border: "none", borderRadius: 10, cursor: (fastLoading || !fastTopic.trim()) ? "not-allowed" : "pointer", fontWeight: 800, fontSize: 14,
+                  }}>{fastLoading ? "Lancement…" : "⚡ Produire la vidéo (un clic)"}</button>
+                )}
+                {fastError && <div style={{ marginTop: 10, fontSize: 12, color: T.red }}>{fastError}</div>}
+              </div>
+
+              <div style={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.mono, marginBottom: 14, opacity: 0.7 }}>
+                — ou mode manuel étape par étape —
+              </div>
 
               {/* NEWS SEARCH — background web search, two modes */}
               <div style={{ marginBottom: 16, padding: 14, background: T.glassSolid, borderRadius: 12, border: `1px solid ${T.border}` }}>
