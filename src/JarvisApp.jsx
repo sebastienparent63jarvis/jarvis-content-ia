@@ -132,6 +132,13 @@ function Spinner() {
 
 // ── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function JarvisApp() {
+  // Détecte l'écran étroit (smartphone) pour adapter la mise en page.
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [view, setView] = useState("dashboard"); // dashboard | generate | pipeline | report | settings
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState(null);
@@ -895,7 +902,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
 
       {/* TOP BAR */}
       <header className="ac-glass" style={{
-        padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: isMobile ? "0 14px" : "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
         position: "sticky", top: 0, zIndex: 100, borderRadius: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -913,17 +920,25 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div style={{ width: 7, height: 7, borderRadius: "50%", background: T.green, boxShadow: `0 0 8px ${T.green}` }} />
           <span style={{ fontSize: 11, fontFamily: T.mono, color: T.green }}>ACTIF</span>
-          <span style={{ fontSize: 11, fontFamily: T.mono, color: T.muted, marginLeft: 8 }}>{today()}</span>
+          {!isMobile && <span style={{ fontSize: 11, fontFamily: T.mono, color: T.muted, marginLeft: 8 }}>{today()}</span>}
         </div>
       </header>
 
       {/* BODY */}
-      <div style={{ display: "flex", flex: 1 }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flex: 1 }}>
 
-        {/* SIDEBAR */}
+        {/* SIDEBAR — verticale sur desktop, barre horizontale scrollable sur mobile */}
         <nav className="ac-glass" style={{
-          width: 200, padding: "20px 0", display: "flex", flexDirection: "column", gap: 2,
-          borderRadius: 0, borderRight: `1px solid ${T.border}`,
+          width: isMobile ? "100%" : 200,
+          padding: isMobile ? "8px 4px" : "20px 0",
+          display: "flex",
+          flexDirection: isMobile ? "row" : "column",
+          gap: isMobile ? 4 : 2,
+          borderRadius: 0,
+          borderRight: isMobile ? "none" : `1px solid ${T.border}`,
+          borderBottom: isMobile ? `1px solid ${T.border}` : "none",
+          overflowX: isMobile ? "auto" : "visible",
+          flexShrink: 0,
         }}>
           {[
             { id: "dashboard", icon: "⬡", label: "Dashboard" },
@@ -935,19 +950,24 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
             { id: "settings", icon: "◎", label: "Paramètres" },
           ].map(item => (
             <button key={item.id} onClick={() => { setView(item.id); if (item.id === "history") loadHistory(); if (item.id === "validation") loadValidationQueue(); }} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 20px",
+              display: "flex", alignItems: "center", gap: isMobile ? 6 : 10,
+              padding: isMobile ? "8px 12px" : "10px 20px",
               background: view === item.id ? `linear-gradient(90deg, ${T.accentGlow}, transparent)` : "transparent",
               color: view === item.id ? "#fff" : T.muted,
-              border: "none", borderLeft: view === item.id ? `2px solid ${T.accent}` : "2px solid transparent",
+              border: "none",
+              borderLeft: isMobile ? "none" : (view === item.id ? `2px solid ${T.accent}` : "2px solid transparent"),
+              borderBottom: isMobile ? (view === item.id ? `2px solid ${T.accent}` : "2px solid transparent") : "none",
               cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 600 : 400,
-              textAlign: "left", width: "100%", transition: "all 0.15s",
+              textAlign: "left", width: isMobile ? "auto" : "100%",
+              whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.15s",
+              borderRadius: isMobile ? 8 : 0,
             }}>
               <span style={{ fontFamily: T.mono, fontSize: 16 }}>{item.icon}</span>
               {item.label}
             </button>
           ))}
 
-          {savedEmail && (
+          {savedEmail && !isMobile && (
             <div style={{ marginTop: "auto", padding: "16px 20px", borderTop: `1px solid ${T.border}` }}>
               <button onClick={handleSendReport} style={{
                 width: "100%", padding: "8px 0", background: reportSent ? T.green : T.accentDim,
@@ -962,7 +982,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
         </nav>
 
         {/* MAIN CONTENT */}
-        <main style={{ flex: 1, padding: 28, overflowY: "auto", maxHeight: "calc(100vh - 56px)" }}>
+        <main style={{ flex: 1, padding: isMobile ? 16 : 28, overflowY: "auto", maxHeight: isMobile ? "none" : "calc(100vh - 56px)", minWidth: 0 }}>
 
           {/* ── DASHBOARD ── */}
           {view === "dashboard" && (
@@ -975,7 +995,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
               </p>
 
               {/* STATS */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: isMobile ? 10 : 16, marginBottom: 28 }}>
                 {[
                   { label: "Format cible", value: "~90s", sub: "Actu mondiale → toi", color: T.accent },
                   { label: "Décisions loguées", value: log.length, sub: "aujourd'hui", color: T.blue },
@@ -1012,7 +1032,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
 
                 {analytics && analytics.summary && (
                   <>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
                       {[
                         { l: "Vidéos", v: analytics.summary.count },
                         { l: "Vues totales", v: analytics.summary.totalViews },
@@ -1068,7 +1088,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   ◈ Champ éditorial — Actu Crue
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
                   {[
                     { label: "Géopolitique & éco", value: "Cœur de cible", trend: "◆" },
                     { label: "Business & marchés", value: "Fort impact", trend: "◆" },
@@ -1125,7 +1145,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                 <div key={item.id} style={{ background: T.glass, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: `inset 0 1px 0 ${T.glassHi}, 0 8px 32px rgba(0,0,0,0.36)` }}>
                   <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
                     {item.videoUrl && (
-                      <video controls src={item.videoUrl} style={{ width: 200, borderRadius: 10, background: "#000" }} />
+                      <video controls src={item.videoUrl} style={{ width: isMobile ? "100%" : 200, maxWidth: isMobile ? 320 : 200, borderRadius: 10, background: "#000" }} />
                     )}
                     <div style={{ flex: 1, minWidth: 220 }}>
                       <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, lineHeight: 1.3 }}>{item.title || "(sans titre)"}</div>
@@ -1793,7 +1813,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                       </div>
                     )}
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
                       {output.rationale && (
                         <div style={{ background: T.glassSolid, borderRadius: 10, padding: 12 }}>
                           <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 4 }}>JUSTIFICATION</div>
