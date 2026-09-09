@@ -61,7 +61,23 @@ export default async (req) => {
     const videoBuf = Buffer.from(await vidResp.arrayBuffer());
 
     // 3. Métadonnées (privé + planifié).
-    const publishAtIso = (publishAtOverride || item.publishAt) ? new Date(publishAtOverride || item.publishAt).toISOString() : null;
+    // Date de publication : override manuel, sinon la date planifiée de l'item.
+    // Si cette date est DÉJÀ PASSÉE (validation tardive), YouTube refuserait une
+    // planification dans le passé → on décale au prochain créneau disponible
+    // aujourd'hui (8h30/12h30/19h30), ou on publie sans planification si plus rien.
+    let chosen = publishAtOverride || item.publishAt || null;
+    let publishAtIso = null;
+    if (chosen) {
+      const chosenMs = new Date(chosen).getTime();
+      if (chosenMs > Date.now() + 2 * 60 * 1000) {
+        publishAtIso = new Date(chosen).toISOString(); // encore dans le futur : OK
+      } else {
+        // créneau passé → prochain créneau du jour
+        const { computeNextSlotToday } = await import("./_auto-core.js");
+        const next = computeNextSlotToday();
+        publishAtIso = next || null; // null = publication immédiate (privé sans date)
+      }
+    }
     // On garantit la présence de #Shorts dans la description (fiabilise le
     // classement en Short pour les uploads via l'API YouTube).
     const baseDesc = item.description || "";

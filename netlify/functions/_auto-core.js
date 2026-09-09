@@ -67,30 +67,48 @@ export function computeNextSlotToday() {
   return target.toISOString();
 }
 
+// Créneau PRÉCIS aujourd'hui (heure de Paris) en ISO. Renvoie {iso, passed}.
+// passed=true si l'heure est déjà dépassée (marge 3 min) — utile pour décaler
+// une vidéo validée trop tard vers le créneau suivant.
+export function computeSlotToday(hour, min) {
+  const now = new Date();
+  const parisDateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, mo, d] = parisDateStr.split("-").map(Number);
+  const target = new Date(Date.UTC(y, mo - 1, d, hour, min));
+  const offsetMin = parisOffsetMinutes(target);
+  target.setUTCMinutes(target.getUTCMinutes() - offsetMin);
+  const passed = target.getTime() <= Date.now() + 3 * 60 * 1000;
+  return { iso: target.toISOString(), passed };
+}
+
 // Produit le SCRIPT du jour et range un job. `slot` = { hour, min }.
 // Renvoie { ok, jobId, title, publishAt } ou { error }.
 export async function runScriptStep(slot, opts = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "ANTHROPIC_API_KEY manquante" };
 
-  // Anti-doublon : titres récents.
+  // Anti-doublon : titres récents (élargi à 30 pour l'autonome).
   let recentTopics = [];
   try {
     const histStore = openStore("jarvis-scripts");
     const idx = (await histStore.get("_index", { type: "json" })) || [];
-    for (const id of idx.slice(0, 15)) {
+    for (const id of idx.slice(0, 30)) {
       const it = await histStore.get(id, { type: "json" });
       if (it?.script?.title) recentTopics.push(it.script.title);
     }
   } catch { /* historique vide, pas grave */ }
 
   // Génère le script. En manuel, un sujet/thème peut être IMPOSÉ (opts.topic).
-  // Sinon (autonome), le modèle choisit lui-même le sujet d'actu du jour.
-  const userPrompt = buildUserPrompt({
+  // Sinon (autonome), le modèle choisit lui-même, MAIS dans le méta-thème imposé
+  // du créneau (opts.themeHint) et guidé par ce qui performe (opts.learningHint).
+  let userPrompt = buildUserPrompt({
     recentTopics,
     topic: opts.topic || undefined,
     newsTheme: opts.newsTheme || undefined,
   });
+  if (opts.themeHint) userPrompt += "\n\n" + opts.themeHint;
+  if (opts.learningHint) userPrompt += "\n\n" + opts.learningHint;
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
@@ -265,8 +283,10 @@ export async function runCollectStep(base) {
     job.updatedAt = new Date().toISOString();
     await jobStore.set(jobId, JSON.stringify(job));
 
-    // Envoie le mail de notification (si une adresse est configurée).
-    if (notifyEmail) {
+    // Mail par vidéo : DÉSACTIVÉ par défaut (on préfère un récap unique à 7h via
+    // auto-notify). Réactivable en mettant PER_VIDEO_EMAIL=1 dans Netlify.
+    const perVideoEmail = process.env.PER_VIDEO_EMAIL === "1";
+    if (notifyEmail && perVideoEmail) {
       try {
         const publishStr = job.publishAt
           ? new Date(job.publishAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
@@ -296,3 +316,97 @@ export async function runCollectStep(base) {
 function escapeHtmlLite(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// ─── AUTONOME : méta-thèmes par créneau + boucle d'auto-amélioration ─────────
+
+// Définition des méta-thèmes imposés (un par créneau).
+export const THEMES = {
+  geopolitique: {
+    label: "Géopolitique internationale",
+    instruction: "MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : GÉOPOLITIQUE INTERNATIONALE (tensions entre États, conflits, diplomatie, équilibres de puissance mondiaux). Le sujet DOIT relever de ce thème.",
+  },
+  societe: {
+    label: "Société & vie politique",
+    instruction: "MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : SOCIÉTÉ & VIE POLITIQUE (débats de société, politique intérieure, grandes tendances sociales, décisions publiques qui touchent le quotidien). Le sujet DOIT relever de ce thème.",
+  },
+  economie: {
+    label: "Économie",
+    instruction: "MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : ÉCONOMIE (marchés, entreprises, prix, pouvoir d'achat, décisions économiques et leurs effets concrets). Le sujet DOIT relever de ce thème.",
+  },
+};
+
+// Rotation FIXE des thèmes par créneau horaire (heure de Paris).
+export const SLOT_THEMES = {
+  "8:30": "geopolitique",
+  "12:30": "societe",
+  "19:30": "economie",
+};
+
+// Construit le "learning hint" : lit les analytics récents et en tire des
+// enseignements de FORME (pas de sujet), pour cibler de mieux en mieux SANS se
+// répéter. On apprend les QUALITÉS des vidéos gagnantes, jamais leur sujet.
+export async function buildLearningHint(base) {
+  try {
+    const r = await fetch(`${base}/api/youtube-analytics`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startDate: last30DaysISO() }),
+    });
+    const d = await r.json();
+    if (!d.videos || d.videos.length < 4) return null; // pas assez de recul
+
+    const sorted = [...d.videos].sort((a, b) => b.views - a.views);
+    const top = sorted.slice(0, 5).map(v => v.title);
+    const flop = sorted.slice(-5).map(v => v.title);
+
+    return `APPRENTISSAGE (données réelles de la chaîne — guide de FORME, PAS de sujet) :
+- Ces vidéos ont le MIEUX marché récemment : ${top.map(t => `"${t}"`).join(", ")}. Analyse ce qui les rend fortes (type d'enjeu, angle, formulation) et reproduis ces QUALITÉS — mais sur un sujet NOUVEAU et DIFFÉRENT.
+- Ces vidéos ont le MOINS marché : ${flop.map(t => `"${t}"`).join(", ")}. Évite ces registres/angles.
+- INTERDICTION ABSOLUE de refaire un sujet proche de ceux déjà listés (dans "sujets déjà traités"). Cible la même EXIGENCE de qualité, jamais le même sujet. Varie les régions, les acteurs, les angles.`;
+  } catch {
+    return null; // si l'analytics échoue, on continue sans (non bloquant)
+  }
+}
+
+function last30DaysISO() {
+  const d = new Date(); d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
+// Orchestre un créneau autonome complet : thème imposé + apprentissage, puis
+// script → production. `slot` = {hour,min}, `themeKey` ∈ THEMES.
+// publishAtIso = date de publication planifiée (le créneau du jour).
+export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
+  const theme = THEMES[themeKey] || THEMES.geopolitique;
+  const learningHint = await buildLearningHint(base);
+  const s = await runScriptStep(slot, {
+    themeHint: theme.instruction,
+    learningHint: learningHint || undefined,
+    ...(publishAtIso !== undefined ? { publishAt: publishAtIso } : {}),
+  });
+  if (!s.ok) return { step: "script", ...s };
+  const p = await runProductionStep(s.jobId, base);
+  return { step: "production", script: s, production: p, theme: theme.label };
+}
+
+// PRODUCTION GROUPÉE : les 3 vidéos du jour (géo 8h30, société 12h30, éco 19h30),
+// chacune planifiée pour SON créneau AUJOURD'HUI. Lancée tôt le matin (~5h) par
+// le cron, pour que tout soit prêt à valider avant 7h.
+export async function runDailyBatch(base) {
+  const plan = [
+    { slot: { hour: 8, min: 30 }, theme: "geopolitique" },
+    { slot: { hour: 12, min: 30 }, theme: "societe" },
+    { slot: { hour: 19, min: 30 }, theme: "economie" },
+  ];
+  const results = [];
+  for (const p of plan) {
+    const { iso } = computeSlotToday(p.slot.hour, p.slot.min);
+    try {
+      const r = await runAutonomousSlot(p.slot, p.theme, base, iso);
+      results.push({ theme: p.theme, slot: `${p.slot.hour}:${String(p.slot.min).padStart(2, "0")}`, ...r });
+    } catch (e) {
+      results.push({ theme: p.theme, error: e.message });
+    }
+  }
+  return { ok: true, produced: results.length, results };
+}
+
