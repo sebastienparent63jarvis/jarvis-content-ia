@@ -65,6 +65,33 @@ export default async (req, context) => {
       titles[it.id] = { title: it.snippet?.title || "(sans titre)", duration: it.contentDetails?.duration || null };
     });
 
+    // 2bis. Rétention au DÉMARRAGE par vidéo (courbe audienceWatchRatio).
+    // Une requête par vidéo (l'API n'accepte pas de liste ici). On limite aux
+    // 12 vidéos les plus vues pour maîtriser le nombre d'appels et le temps.
+    const startRetention = {}; // videoId -> % au tout début (proxy 3 premières s)
+    const topForRetention = videoIds.slice(0, 10);
+    for (const vid of topForRetention) {
+      try {
+        const rp = new URLSearchParams({
+          ids: "channel==MINE", startDate, endDate,
+          metrics: "audienceWatchRatio",
+          dimensions: "elapsedVideoTimeRatio",
+          filters: `video==${vid}`,
+        });
+        const rr = await fetch(`https://youtubeanalytics.googleapis.com/v2/reports?${rp.toString()}`, {
+          headers: { "Authorization": `Bearer ${accessToken}` },
+        });
+        if (!rr.ok) continue;
+        const rd = await rr.json();
+        const curve = rd.rows || []; // [[ratioTemps, ratioAudience], ...] 100 points
+        if (curve.length === 0) continue;
+        // Point de départ = premier point de la courbe (~1% du temps écoulé),
+        // le plus proche des toutes premières secondes.
+        const first = curve[0];
+        startRetention[vid] = Math.round((first[1] || 0) * 100);
+      } catch { /* on ignore cette vidéo si la courbe échoue */ }
+    }
+
     // 3. Assemble le résultat lisible.
     const videos = rows.map(r => ({
       videoId: r[0],
@@ -73,6 +100,7 @@ export default async (req, context) => {
       avgViewDurationSec: Math.round(r[2]),
       avgViewPercentage: Math.round(r[3] * 10) / 10,
       subscribersGained: r[4],
+      startRetention: (r[0] in startRetention) ? startRetention[r[0]] : null,
     }));
 
     // 4. Agrégats globaux du batch.

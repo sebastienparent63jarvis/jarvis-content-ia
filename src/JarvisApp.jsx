@@ -1055,6 +1055,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                               <th style={{ padding: "6px 8px" }}>Titre</th>
                               <th style={{ padding: "6px 8px", textAlign: "right" }}>Vues</th>
                               <th style={{ padding: "6px 8px", textAlign: "right" }}>Vue moy.</th>
+                              <th style={{ padding: "6px 8px", textAlign: "right" }}>Démarrage</th>
                               <th style={{ padding: "6px 8px", textAlign: "right" }}>Rétention</th>
                               <th style={{ padding: "6px 8px", textAlign: "right" }}>Abonnés</th>
                             </tr>
@@ -1065,6 +1066,7 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                                 <td style={{ padding: "8px", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</td>
                                 <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono, fontWeight: 700 }}>{v.views}</td>
                                 <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono }}>{v.avgViewDurationSec}s</td>
+                                <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono, color: v.startRetention == null ? T.muted : v.startRetention >= 70 ? T.green : v.startRetention >= 50 ? T.blue : T.red }}>{v.startRetention == null ? "—" : v.startRetention + "%"}</td>
                                 <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono, color: v.avgViewPercentage >= 50 ? T.green : v.avgViewPercentage >= 30 ? T.blue : T.red }}>{v.avgViewPercentage}%</td>
                                 <td style={{ padding: "8px", textAlign: "right", fontFamily: T.mono }}>{v.subscribersGained > 0 ? "+" : ""}{v.subscribersGained}</td>
                               </tr>
