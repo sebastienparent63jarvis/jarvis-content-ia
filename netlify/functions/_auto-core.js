@@ -162,20 +162,23 @@ export async function runProductionStep(jobId, base) {
   };
 
   try {
-    // 1. VOIX : tous les segments EN PARALLÈLE (au lieu d'un par un en série).
-    // La génération séquentielle de 15-20 segments dépassait la limite de temps
-    // et faisait couper generate-audio (erreur 499). En parallèle, le temps total
-    // = celui du segment le plus lent, pas la somme. On garde l'ordre via l'index.
-    // Un léger échelonnement (petit délai croissant) évite de saturer l'API d'un
-    // coup et de déclencher un rate-limit ElevenLabs.
-    const audioSegments = await Promise.all(segments.map(async (seg, i) => {
-      await new Promise(r => setTimeout(r, i * 150)); // échelonne les départs
-      const a = await post("/api/generate-audio", { text: seg.text });
-      const h = await post("/api/store-audio", { audio_base64: a.audio_base64 });
-      return { index: i, url: h.url, duration: estimateDurationFromChars(seg.text) };
-    }));
-    // On s'assure que l'ordre par index est respecté (Promise.all le garde déjà,
-    // mais on trie par sécurité).
+    // 1. VOIX : segments par LOTS parallèles limités. ElevenLabs autorise 5
+    // requêtes concurrentes max (erreur 429 au-delà). Le tout-séquentiel était
+    // trop lent (499), le tout-parallèle dépassait la limite (429). On traite
+    // donc par paquets de 4 (marge sous 5), un paquet après l'autre : rapide ET
+    // dans les clous. L'ordre est garanti par l'index.
+    const CONCURRENCY = 4;
+    const audioSegments = [];
+    for (let start = 0; start < segments.length; start += CONCURRENCY) {
+      const batch = segments.slice(start, start + CONCURRENCY);
+      const done = await Promise.all(batch.map(async (seg, k) => {
+        const i = start + k;
+        const a = await post("/api/generate-audio", { text: seg.text });
+        const h = await post("/api/store-audio", { audio_base64: a.audio_base64 });
+        return { index: i, url: h.url, duration: estimateDurationFromChars(seg.text) };
+      }));
+      audioSegments.push(...done);
+    }
     audioSegments.sort((a, b) => a.index - b.index);
 
     // 2. VISUELS Pexels.
