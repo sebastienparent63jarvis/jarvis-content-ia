@@ -3,19 +3,23 @@
 // entre-temps). Remplace les mails par-vidéo. L'utilisateur valide le lot en
 // une session dans « À valider ».
 
-import { parisNow, openStore } from "./_auto-core.js";
+import { parisMinutes, openStore, alreadyRanToday, markRanToday } from "./_auto-core.js";
 
-const NOTIFY = { hour: 7, min: 0 };
-const TOLERANCE_MIN = 20;
+const TASK = "daily-notify";
+const TARGET_MIN = 7 * 60; // 7h Paris
 
 function esc(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 export default async (req) => {
-  const { h, m } = parisNow();
-  if (Math.abs((h * 60 + m) - (NOTIFY.hour * 60 + NOTIFY.min)) > TOLERANCE_MIN) {
-    return new Response(JSON.stringify({ skipped: true, parisTime: `${h}:${String(m).padStart(2, "0")}` }), {
+  if (await alreadyRanToday(TASK)) {
+    return new Response(JSON.stringify({ skipped: "déjà notifié aujourd'hui" }), {
+      status: 200, headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (parisMinutes() < TARGET_MIN) {
+    return new Response(JSON.stringify({ skipped: "avant 7h Paris" }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   }
@@ -39,6 +43,8 @@ export default async (req) => {
     return new Response(JSON.stringify({ error: "lecture file échouée: " + e.message }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
 
+  // Rien à notifier aujourd'hui : on NE marque PAS (on retentera au prochain
+  // passage, au cas où les vidéos arrivent un peu plus tard).
   if (pending.length === 0) {
     return new Response(JSON.stringify({ sent: false, reason: "aucune vidéo en attente" }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
@@ -49,6 +55,7 @@ export default async (req) => {
     return `<li style="margin-bottom:8px"><b>${esc(v.title || "Sans titre")}</b><br><span style="color:#777;font-size:13px">Publication prévue : ${when}</span></li>`;
   }).join("");
 
+  await markRanToday(TASK); // on a des vidéos : on notifie une fois pour la journée
   try {
     await fetch(`${base}/api/send-email`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -74,4 +81,4 @@ export default async (req) => {
 };
 
 // Cron autour de 7h Paris : 5h-6h UTC (été/hiver).
-export const config = { schedule: "0,15,30,45 5-6 * * *" };
+export const config = { schedule: "0,15,30,45 5-9 * * *" };

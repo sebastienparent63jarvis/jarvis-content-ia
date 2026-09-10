@@ -162,14 +162,21 @@ export async function runProductionStep(jobId, base) {
   };
 
   try {
-    // 1. VOIX segment par segment (durées réelles pour la synchro).
-    const audioSegments = [];
-    for (let i = 0; i < segments.length; i++) {
-      const a = await post("/api/generate-audio", { text: segments[i].text });
-      // Héberge le segment audio (URL publique pour Shotstack).
+    // 1. VOIX : tous les segments EN PARALLÈLE (au lieu d'un par un en série).
+    // La génération séquentielle de 15-20 segments dépassait la limite de temps
+    // et faisait couper generate-audio (erreur 499). En parallèle, le temps total
+    // = celui du segment le plus lent, pas la somme. On garde l'ordre via l'index.
+    // Un léger échelonnement (petit délai croissant) évite de saturer l'API d'un
+    // coup et de déclencher un rate-limit ElevenLabs.
+    const audioSegments = await Promise.all(segments.map(async (seg, i) => {
+      await new Promise(r => setTimeout(r, i * 150)); // échelonne les départs
+      const a = await post("/api/generate-audio", { text: seg.text });
       const h = await post("/api/store-audio", { audio_base64: a.audio_base64 });
-      audioSegments.push({ index: i, url: h.url, duration: estimateDurationFromChars(segments[i].text) });
-    }
+      return { index: i, url: h.url, duration: estimateDurationFromChars(seg.text) };
+    }));
+    // On s'assure que l'ordre par index est respecté (Promise.all le garde déjà,
+    // mais on trie par sécurité).
+    audioSegments.sort((a, b) => a.index - b.index);
 
     // 2. VISUELS Pexels.
     const vis = await post("/api/fetch-visuals", { segments });
@@ -410,3 +417,36 @@ export async function runDailyBatch(base) {
   return { ok: true, produced: results.length, results };
 }
 
+
+// ─── GARDE ANTI-DOUBLON quotidien ────────────────────────────────────────────
+// Permet à un cron de tourner large (fenêtre horaire ample) tout en n'exécutant
+// sa tâche qu'UNE fois par jour. Évite le double filtre fragile (fenêtre UTC +
+// tolérance Paris) qui ratait les créneaux. On mémorise la date Paris du dernier
+// run réussi par tâche ; si c'est déjà aujourd'hui, on skip.
+
+function parisDateKey() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+// Renvoie true si la tâche `taskId` a DÉJÀ tourné aujourd'hui (heure de Paris).
+export async function alreadyRanToday(taskId) {
+  try {
+    const store = openStore("jarvis-cron-guard");
+    const last = await store.get(taskId);
+    return last === parisDateKey();
+  } catch { return false; }
+}
+
+// Marque la tâche `taskId` comme ayant tourné aujourd'hui.
+export async function markRanToday(taskId) {
+  try {
+    const store = openStore("jarvis-cron-guard");
+    await store.set(taskId, parisDateKey());
+  } catch { /* best effort */ }
+}
+
+// Heure de Paris courante en minutes depuis minuit (pour les fenêtres larges).
+export function parisMinutes() {
+  const { h, m } = parisNow();
+  return h * 60 + m;
+}
