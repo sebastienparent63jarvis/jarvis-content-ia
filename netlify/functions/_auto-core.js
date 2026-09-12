@@ -162,24 +162,18 @@ export async function runProductionStep(jobId, base) {
   };
 
   try {
-    // 1. VOIX : segments par LOTS parallèles limités. ElevenLabs autorise 5
-    // requêtes concurrentes max (erreur 429 au-delà). Le tout-séquentiel était
-    // trop lent (499), le tout-parallèle dépassait la limite (429). On traite
-    // donc par paquets de 4 (marge sous 5), un paquet après l'autre : rapide ET
-    // dans les clous. L'ordre est garanti par l'index.
-    const CONCURRENCY = 4;
+    // 1. VOIX : séquentiel par vidéo (1 appel à la fois). En Option 2, jusqu'à 3
+    // vidéos tournent EN PARALLÈLE (une background chacune) ; avec 1 appel voix
+    // concurrent par vidéo, on a au pire 3 appels ElevenLabs simultanés — sous la
+    // limite de 5. Chaque vidéo ayant désormais 15 min propres, la lenteur du
+    // séquentiel n'est plus un problème (c'était le cas quand tout tenait dans une
+    // seule fonction). Robuste contre le 429.
     const audioSegments = [];
-    for (let start = 0; start < segments.length; start += CONCURRENCY) {
-      const batch = segments.slice(start, start + CONCURRENCY);
-      const done = await Promise.all(batch.map(async (seg, k) => {
-        const i = start + k;
-        const a = await post("/api/generate-audio", { text: seg.text });
-        const h = await post("/api/store-audio", { audio_base64: a.audio_base64 });
-        return { index: i, url: h.url, duration: estimateDurationFromChars(seg.text) };
-      }));
-      audioSegments.push(...done);
+    for (let i = 0; i < segments.length; i++) {
+      const a = await post("/api/generate-audio", { text: segments[i].text });
+      const h = await post("/api/store-audio", { audio_base64: a.audio_base64 });
+      audioSegments.push({ index: i, url: h.url, duration: estimateDurationFromChars(segments[i].text) });
     }
-    audioSegments.sort((a, b) => a.index - b.index);
 
     // 2. VISUELS Pexels.
     const vis = await post("/api/fetch-visuals", { segments });
@@ -396,6 +390,35 @@ export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
   if (!s.ok) return { step: "script", ...s };
   const p = await runProductionStep(s.jobId, base);
   return { step: "production", script: s, production: p, theme: theme.label };
+}
+
+// PLAN QUOTIDIEN : quel thème et quel créneau pour chaque vidéo du jour.
+export const DAILY_PLAN = [
+  { key: "geopolitique", slot: { hour: 8, min: 30 } },
+  { key: "societe", slot: { hour: 12, min: 30 } },
+  { key: "economie", slot: { hour: 19, min: 30 } },
+];
+
+// Produit UNE SEULE vidéo (un thème). Utilisé par l'Option 2 : une background
+// function par vidéo, chacune avec ses 15 min. Trace chaque étape via console.log
+// (visible dans les logs Netlify de la fonction).
+export async function runOneVideo(themeKey, base) {
+  const entry = DAILY_PLAN.find(p => p.key === themeKey) || DAILY_PLAN[0];
+  const { iso } = computeSlotToday(entry.slot.hour, entry.slot.min);
+  const slotLabel = `${entry.slot.hour}:${String(entry.slot.min).padStart(2, "0")}`;
+  console.log(`[runOneVideo] DÉBUT thème=${themeKey} créneau=${slotLabel} publishAt=${iso}`);
+  try {
+    const r = await runAutonomousSlot(entry.slot, themeKey, base, iso);
+    if (r.production?.ok) {
+      console.log(`[runOneVideo] OK thème=${themeKey} → rendering, renderId=${r.production.renderId}`);
+    } else {
+      console.log(`[runOneVideo] ÉCHEC production thème=${themeKey} → ${r.production?.error || r.error || "inconnu"}`);
+    }
+    return { theme: themeKey, slot: slotLabel, ...r };
+  } catch (e) {
+    console.log(`[runOneVideo] EXCEPTION thème=${themeKey} → ${e.message}`);
+    return { theme: themeKey, slot: slotLabel, error: e.message };
+  }
 }
 
 // PRODUCTION GROUPÉE : les 3 vidéos du jour (géo 8h30, société 12h30, éco 19h30),
