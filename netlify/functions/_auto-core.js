@@ -331,7 +331,14 @@ export const THEMES = {
   },
   societe: {
     label: "Société & vie politique",
-    instruction: "MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : SOCIÉTÉ & VIE POLITIQUE (débats de société, politique intérieure, grandes tendances sociales, décisions publiques qui touchent le quotidien). Le sujet DOIT relever de ce thème.",
+    instruction: `MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : SOCIÉTÉ & VIE POLITIQUE (débats de société, politique intérieure, grandes tendances sociales, décisions publiques qui touchent le quotidien). Le sujet DOIT relever de ce thème.
+
+RÈGLES ÉDITORIALES STRICTES POUR CE THÈME (pour éviter le bridage de distribution par YouTube sur les sujets sensibles) :
+- ANGLE FACTUEL ET CONSTRUCTIF, jamais "révélation d'une manipulation cachée". Explique un fait de société et ce qu'il change concrètement, sans sous-entendre qu'une vérité est dissimulée au spectateur.
+- VOCABULAIRE INTERDIT (déclenche la modération) : "manipulation", "manipuler", "on te ment", "ce qu'on te cache", "insidieux", "mécanisme caché", "vérité qu'on te cache", "les médias mentent", "sans que tu t'en aperçoives", "un mensonge répété", "ta seule vraie liberté", "réveille-toi", "ils ne veulent pas que tu saches". Ces tournures font passer la vidéo pour du contenu complotiste.
+- SUJETS À ÉVITER absolument : le déroulé d'une élection à venir (qui va gagner, qui est favorisé), la critique frontale des médias ou de leur "agenda", les théories sur le contrôle de l'opinion. Ce sont les sujets les plus bridés.
+- SUJETS À PRIVILÉGIER : phénomènes de société larges et universels (éducation, santé publique, travail, logement, environnement du quotidien, évolutions démographiques, modes de vie, nouvelles lois concrètes et leurs effets pratiques). Ces sujets sont riches, engageants ET librement distribués.
+- Reste incarné et percutant, mais par la CLARTÉ et l'ENJEU RÉEL, jamais par le soupçon ou la dénonciation d'un complot.`,
   },
   economie: {
     label: "Économie",
