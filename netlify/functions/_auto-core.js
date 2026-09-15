@@ -353,6 +353,72 @@ export const SLOT_THEMES = {
   "19:30": "economie",
 };
 
+// RECHERCHE WEB RÉELLE d'un sujet d'actualité FRAIS pour un thème donné. C'est le
+// garde-fou anti-invention : le pipeline auto ne doit JAMAIS inventer un fait
+// (ex. "la BCE baisse ses taux" alors qu'elle les a haussés). On oblige le modèle
+// à chercher sur le web un événement DATÉ de moins de 7 jours, et à renvoyer le
+// fait vérifié + sa date + sa source. Renvoie { topic, factue, date, source } ou
+// { error }.
+export async function findFreshTopic(themeKey) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { error: "ANTHROPIC_API_KEY manquante" };
+  const theme = THEMES[themeKey] || THEMES.geopolitique;
+
+  const today = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full" }).format(new Date());
+  const sys = `Tu es un chercheur d'actualité pour une chaîne YouTube. Tu utilises la recherche web pour trouver UN événement d'actualité RÉEL et RÉCENT.
+
+RÈGLES ABSOLUES :
+- L'événement doit relever du thème imposé : ${theme.label}.
+- L'événement doit dater de MOINS DE 7 JOURS (nous sommes le ${today}). Si tu ne trouves rien d'aussi récent, dis-le, n'invente RIEN.
+- INTERDICTION FORMELLE d'inventer, de supposer ou d'extrapoler un fait. Chaque chiffre, chaque décision, chaque événement doit venir DIRECTEMENT d'une source web que tu as consultée. Si un fait n'est pas confirmé par ta recherche, ne l'affirme pas.
+- Vérifie le SENS des décisions (ex : une banque centrale qui "hausse" vs "baisse" ses taux — ne te fie pas à une tendance passée, lis la source réelle).
+
+Réponds UNIQUEMENT en JSON, sans texte autour :
+{ "trouve": true/false, "titre_evenement": "l'événement en une phrase factuelle", "faits_verifies": "les faits clés vérifiés (chiffres, décisions, acteurs) tels que trouvés dans les sources", "date_evenement": "AAAA-MM-JJ", "source": "nom du média/source" }
+Si rien de moins de 7 jours : { "trouve": false }.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1200,
+        system: sys,
+        messages: [{ role: "user", content: `Trouve un événement d'actualité réel, du thème "${theme.label}", datant de moins de 7 jours. Cherche sur le web, vérifie, puis réponds en JSON.` }],
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data.error?.message || "Erreur API recherche" };
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    let clean = text.replace(/```json|```/g, "").trim();
+    const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+    if (s !== -1 && e !== -1 && e > s) clean = clean.slice(s, e + 1);
+    let parsed;
+    try { parsed = JSON.parse(clean); } catch { return { error: "réponse recherche non JSON" }; }
+
+    if (!parsed.trouve) return { error: "aucun événement de moins de 7 jours trouvé pour ce thème" };
+
+    // Vérifie la fraîcheur côté code aussi (ceinture + bretelles).
+    if (parsed.date_evenement) {
+      const evDate = new Date(parsed.date_evenement).getTime();
+      const septDays = 8 * 24 * 60 * 60 * 1000; // 8 jours de marge
+      if (!isNaN(evDate) && (Date.now() - evDate) > septDays) {
+        return { error: `événement trop ancien (${parsed.date_evenement})` };
+      }
+    }
+    return {
+      topic: parsed.titre_evenement,
+      faits: parsed.faits_verifies || "",
+      date: parsed.date_evenement || "",
+      source: parsed.source || "",
+    };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 // Construit le "learning hint" : lit les analytics récents et en tire des
 // enseignements de FORME (pas de sujet), pour cibler de mieux en mieux SANS se
 // répéter. On apprend les QUALITÉS des vidéos gagnantes, jamais leur sujet.
@@ -388,15 +454,32 @@ function last30DaysISO() {
 // publishAtIso = date de publication planifiée (le créneau du jour).
 export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
   const theme = THEMES[themeKey] || THEMES.geopolitique;
+
+  // ÉTAPE ANTI-INVENTION : on cherche d'abord un vrai événement récent (<7j) sur
+  // le web. Sans ça, le modèle inventerait un fait plausible mais faux.
+  const fresh = await findFreshTopic(themeKey);
+  if (fresh.error) {
+    console.log(`[autoSlot] pas de sujet frais pour ${themeKey} : ${fresh.error}`);
+    return { step: "recherche", error: "Aucun sujet d'actualité vérifié (<7j) trouvé : " + fresh.error };
+  }
+  console.log(`[autoSlot] sujet vérifié (${fresh.date}, ${fresh.source}) : ${fresh.topic}`);
+
+  // Consigne stricte anti-invention passée au générateur de script.
+  const factsHint = `SUJET IMPOSÉ (événement réel vérifié par recherche web, daté du ${fresh.date}, source : ${fresh.source}) : ${fresh.topic}
+FAITS VÉRIFIÉS À RESPECTER SCRUPULEUSEMENT (n'en invente aucun autre, ne modifie aucun chiffre, ne change pas le SENS d'une décision) : ${fresh.faits}
+INTERDICTION ABSOLUE d'ajouter un chiffre, une date ou un fait qui ne figure pas ci-dessus. Si tu as besoin d'un détail non fourni, reste général plutôt que d'inventer.`;
+
   const learningHint = await buildLearningHint(base);
   const s = await runScriptStep(slot, {
-    themeHint: theme.instruction,
+    topic: fresh.topic,
+    newsTheme: fresh.topic,
+    themeHint: theme.instruction + "\n\n" + factsHint,
     learningHint: learningHint || undefined,
     ...(publishAtIso !== undefined ? { publishAt: publishAtIso } : {}),
   });
   if (!s.ok) return { step: "script", ...s };
   const p = await runProductionStep(s.jobId, base);
-  return { step: "production", script: s, production: p, theme: theme.label };
+  return { step: "production", script: s, production: p, theme: theme.label, sourceEvent: fresh.topic, sourceDate: fresh.date };
 }
 
 // PLAN QUOTIDIEN : quel thème et quel créneau pour chaque vidéo du jour.
