@@ -280,6 +280,9 @@ export default function JarvisApp() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState(null);
   const [analyticsStart, setAnalyticsStart] = useState("2026-08-21");
+  const [exportState, setExportState] = useState("idle"); // idle | running | done | error
+  const [exportStep, setExportStep] = useState(null);
+  const [exportRows, setExportRows] = useState(0);
   const [thumbLoading, setThumbLoading] = useState(false);
   const [thumbUrl, setThumbUrl] = useState(null);
   const [thumbError, setThumbError] = useState(null);
@@ -690,6 +693,30 @@ export default function JarvisApp() {
   };
 
   // Récupère les stats par vidéo depuis une date (API YouTube Analytics).
+  // Lance l'export CSV complet (background) et suit sa progression.
+  const startExport = async () => {
+    setExportState("running");
+    setExportStep("démarrage…");
+    try {
+      await fetch("/.netlify/functions/export-analysis-background", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: analyticsStart }),
+      });
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      for (let i = 0; i < 90; i++) { // jusqu'à ~7,5 min
+        await sleep(5000);
+        const r = await fetch("/api/export-status");
+        const d = await r.json();
+        if (d.status === "running") setExportStep(d.step || "en cours…");
+        if (d.status === "done") { setExportRows(d.rows || 0); setExportState("done"); return; }
+        if (d.status === "error") { setExportStep(d.error || "erreur"); setExportState("error"); return; }
+      }
+      setExportStep("délai dépassé"); setExportState("error");
+    } catch (e) {
+      setExportStep(e.message); setExportState("error");
+    }
+  };
+
   const fetchAnalytics = async () => {
     setAnalyticsLoading(true);
     setAnalyticsError(null);
@@ -1023,8 +1050,20 @@ Génère le contenu optimal. Réponds UNIQUEMENT en JSON valide avec les champs 
                       padding: "6px 14px", background: analyticsLoading ? T.accentDim : T.accent, color: "#fff",
                       border: "none", borderRadius: 6, cursor: analyticsLoading ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 700,
                     }}>{analyticsLoading ? "Chargement…" : "Analyser"}</button>
+                    <button onClick={startExport} disabled={exportState === "running"} style={{
+                      padding: "6px 14px", background: "transparent", color: T.accent,
+                      border: `1px solid ${T.accent}`, borderRadius: 6, cursor: exportState === "running" ? "wait" : "pointer", fontSize: 12, fontWeight: 700,
+                    }}>{exportState === "running" ? (exportStep || "Export…") : "⬇ Export CSV complet"}</button>
                   </div>
                 </div>
+                {exportState === "done" && (
+                  <div style={{ marginBottom: 14, padding: 10, background: `${T.green}15`, border: `1px solid ${T.green}44`, borderRadius: 8, fontSize: 12, color: T.text }}>
+                    ✓ Export prêt ({exportRows} vidéos). <a href="/api/export-download" style={{ color: T.accent, fontWeight: 700 }}>Télécharger le CSV</a>
+                  </div>
+                )}
+                {exportState === "error" && (
+                  <div style={{ marginBottom: 14, padding: 10, background: `${T.red}15`, borderRadius: 8, fontSize: 12, color: T.red }}>Export échoué : {exportStep}</div>
+                )}
 
                 {analyticsError && (
                   <div style={{ fontSize: 12, color: T.red, lineHeight: 1.6, padding: 10, background: `${T.red}11`, borderRadius: 8, whiteSpace: "pre-line" }}>{analyticsError}</div>
