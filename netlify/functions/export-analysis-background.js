@@ -120,6 +120,8 @@ export default async (req) => {
             ? job.script.narration_segments.map(s => s.text).join(" ") : "";
           scriptsByTitle[job.script.title.trim()] = {
             theme: job.slot === "manuel" ? "manuel" : (job.script.category || ""),
+            angle: job.angle || "",
+            register: job.register || "",
             description: job.script.description || "",
             narration,
           };
@@ -130,7 +132,7 @@ export default async (req) => {
     // 6. Assemble les lignes + DRAPEAU DIAGNOSTIC.
     await setStatus({ status: "running", step: "diagnostic" });
     const header = [
-      "Titre", "Date publication", "Thème", "Vues", "Démarrage (%)", "Rétention moy (%)",
+      "Titre", "Date publication", "Thème", "Angle", "Registre narratif", "Vues", "Démarrage (%)", "Rétention moy (%)",
       "Durée vue (s)", "Abonnés gagnés", "Part feed Shorts (%)", "Diagnostic", "Script (narration)", "Description",
     ];
     const lines = [header.map(csvCell).join(",")];
@@ -147,6 +149,8 @@ export default async (req) => {
       const shorts = (vid in shortsShare) ? shortsShare[vid] : null;
       const sc = scriptsByTitle[title] || null;
       const theme = sc?.theme || "";
+      const angle = sc?.angle || "";
+      const register = sc?.register || "";
 
       // DRAPEAU DIAGNOSTIC (croisement de signaux) :
       let diag;
@@ -165,7 +169,7 @@ export default async (req) => {
       }
 
       lines.push([
-        title, pub, theme, views, start ?? "", avgPct, avgDur, subs, shorts ?? "", diag,
+        title, pub, theme, angle, register, views, start ?? "", avgPct, avgDur, subs, shorts ?? "", diag,
         sc?.narration || "(script non retrouvé)", sc?.description || "",
       ].map(csvCell).join(","));
     }

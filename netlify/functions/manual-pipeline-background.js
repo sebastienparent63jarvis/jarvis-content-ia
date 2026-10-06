@@ -5,7 +5,7 @@
 //
 // Corps : { topic, angle } (angle optionnel, comme la recherche d'actu)
 
-import { runScriptStep, runProductionStep, openStore, computeNextSlotToday } from "./_auto-core.js";
+import { runScriptStep, runProductionStep, openStore, pickAngleAndRegister, buildEditorialHint, recordEditorialChoice } from "./_auto-core.js";
 
 export default async (req) => {
   const runId = `manual-${Date.now()}`;
@@ -28,11 +28,19 @@ export default async (req) => {
   // MODE MANUEL : planifie au prochain créneau disponible AUJOURD'HUI (8h30 /
   // 12h30 / 19h30). Après 19h30 → null : l'utilisateur choisira la date dans
   // « À valider ».
-  const publishAt = computeNextSlotToday(); // ISO ou null
+  // Les vidéos MANUELLES viennent toujours EN PLUS des créneaux auto déjà occupés.
+  // On ne leur attribue donc aucune date : l'utilisateur la choisit dans « À valider ».
+  const publishAt = null;
+
+  // MÊME VARIÉTÉ ÉDITORIALE QUE L'AUTO (idées 1+5+2) : le manuel est le calque
+  // exact de l'auto. Angle + registre non répétés (mémoire 14j) + zoom micro.
+  const { angle, register } = await pickAngleAndRegister(topic);
+  const editorialHint = buildEditorialHint(angle, register);
 
   // 1. Script à partir du sujet imposé.
-  const s = await runScriptStep({ hour: 8, min: 30 }, { topic, newsTheme: topic, publishAt });
+  const s = await runScriptStep({ hour: 8, min: 30 }, { topic, newsTheme: topic, publishAt, editorialHint, angle, register });
   if (!s.ok) { await mark({ status: "done", result: s }); return accepted(runId); }
+  await recordEditorialChoice(topic, angle, register);
 
   await mark({ status: "running", step: "production", jobId: s.jobId, title: s.title });
 

@@ -108,6 +108,7 @@ export async function runScriptStep(slot, opts = {}) {
   });
   if (opts.themeHint) userPrompt += "\n\n" + opts.themeHint;
   if (opts.learningHint) userPrompt += "\n\n" + opts.learningHint;
+  if (opts.editorialHint) userPrompt += "\n\n" + opts.editorialHint;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -129,6 +130,7 @@ export async function runScriptStep(slot, opts = {}) {
   const job = {
     id: jobId, status: "script_done", createdAt: new Date().toISOString(),
     slot: opts.topic ? "manuel" : `${slot.hour}:${String(slot.min).padStart(2, "0")}`, publishAt, script,
+    angle: opts.angle || null, register: opts.register || null, // pour l'export/analyse
   };
   await jobStore.set(jobId, JSON.stringify(job));
   const jIdx = (await jobStore.get("_index", { type: "json" })) || [];
@@ -353,6 +355,86 @@ export const SLOT_THEMES = {
   "19:30": "economie",
 };
 
+// ─── VARIÉTÉ ÉDITORIALE (5 idées) ────────────────────────────────────────────
+
+// IDÉE 1 — Angles d'attaque. Un même macro-sujet traité différemment.
+export const ANGLES = {
+  economique: "ANGLE ÉCONOMIQUE : traite le sujet par l'argent, les coûts, les gagnants/perdants financiers, les chiffres clés.",
+  humain: "ANGLE HUMAIN/INCARNÉ : raconte le sujet à travers une personne, un métier, un lieu précis qui le vit concrètement.",
+  historique: "ANGLE HISTORIQUE : explique comment on en est arrivé là, la racine du problème, le précédent qui éclaire aujourd'hui.",
+  prospectif: "ANGLE PROSPECTIF : projette les conséquences à venir, ce qui va changer dans les mois/années qui viennent.",
+  geopolitique: "ANGLE RAPPORTS DE FORCE : qui gagne du pouvoir, qui en perd, les alliances, les enjeux de domination.",
+};
+
+// IDÉE 5 — Registres narratifs. Même fond, structure de récit différente.
+export const REGISTERS = {
+  question_reponse: "STRUCTURE QUESTION-RÉPONSE : ouvre sur une énigme/question intrigante, puis déroule la réponse.",
+  avant_apres: "STRUCTURE AVANT/APRÈS : montre comment c'était, puis ce qui a basculé, puis ce que ça donne maintenant.",
+  trois_chiffres: "STRUCTURE 3 CHIFFRES : articule tout le récit autour de 3 chiffres/faits marquants qui disent l'essentiel.",
+  point_de_vue: "STRUCTURE POINT DE VUE : raconte depuis celui qui subit ou vit la situation, à hauteur d'humain.",
+  revelation: "STRUCTURE RÉVÉLATION : part d'un fait apparent, puis dévoile un angle inattendu que personne ne voit.",
+};
+
+const ANGLE_KEYS = Object.keys(ANGLES);
+const REGISTER_KEYS = Object.keys(REGISTERS);
+const MEMORY_DAYS = 14; // mémoire anti-répétition
+
+// Normalise un macro-sujet pour la mémoire (minuscules, mots clés principaux).
+function macroKey(topic) {
+  return (topic || "").toLowerCase().replace(/[^a-zàâäéèêëïîôöùûüç0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3).slice(0, 4).sort().join("-");
+}
+
+// IDÉE 1+5 — Choisit un angle et un registre NON utilisés récemment sur ce
+// macro-sujet (mémoire 14j), pour éviter de refaire le même traitement.
+export async function pickAngleAndRegister(topic) {
+  const key = macroKey(topic);
+  const now = Date.now();
+  const cutoff = now - MEMORY_DAYS * 24 * 60 * 60 * 1000;
+  let usedAngles = [], usedRegisters = [], allRecentRegisters = [];
+  try {
+    const store = openStore("jarvis-editorial-memory");
+    const log = (await store.get("log", { type: "json" })) || [];
+    for (const e of log) {
+      if (e.at < cutoff) continue;
+      allRecentRegisters.push(e.register); // registres récents, tous sujets
+      if (e.macro === key) { usedAngles.push(e.angle); usedRegisters.push(e.register); }
+    }
+  } catch { /* mémoire vide */ }
+
+  // Angle : le premier non utilisé sur ce macro-sujet ; sinon le moins récent.
+  const freeAngles = ANGLE_KEYS.filter(a => !usedAngles.includes(a));
+  const angle = freeAngles.length ? freeAngles[Math.floor(Math.random() * freeAngles.length)]
+    : ANGLE_KEYS[Math.floor(Math.random() * ANGLE_KEYS.length)];
+
+  // Registre : on évite ceux utilisés récemment TOUS SUJETS (pour varier le ressenti global).
+  const freeRegisters = REGISTER_KEYS.filter(r => !allRecentRegisters.slice(0, 4).includes(r));
+  const register = freeRegisters.length ? freeRegisters[Math.floor(Math.random() * freeRegisters.length)]
+    : REGISTER_KEYS[Math.floor(Math.random() * REGISTER_KEYS.length)];
+
+  return { angle, register };
+}
+
+// Enregistre le choix (angle+registre+macro) dans la mémoire 14j.
+export async function recordEditorialChoice(topic, angle, register) {
+  try {
+    const store = openStore("jarvis-editorial-memory");
+    const log = (await store.get("log", { type: "json" })) || [];
+    log.unshift({ macro: macroKey(topic), angle, register, at: Date.now() });
+    // On garde ~120 entrées (largement > 14j même à 5/jour).
+    await store.set("log", JSON.stringify(log.slice(0, 120)));
+  } catch { /* best effort */ }
+}
+
+// Construit le bloc de consignes éditoriales (idées 1, 2, 5) pour le prompt.
+export function buildEditorialHint(angle, register) {
+  return `CONSIGNES ÉDITORIALES DE VARIÉTÉ (impératif) :
+- ${ANGLES[angle] || ANGLES.humain}
+- ${REGISTERS[register] || REGISTERS.question_reponse}
+- ZOOM MICRO OBLIGATOIRE (idée clé) : n'ouvre JAMAIS sur une abstraction ("le monde bascule", "la France à bout"). Commence par un point d'entrée CONCRET, PRÉCIS et INCARNÉ — une personne, un lieu, un chiffre, une scène réelle — puis élargis vers le macro-sujet. Le général se raconte par le particulier.
+- Reste factuel et vérifié, sans vocabulaire complotiste ni hyperbole.`;
+}
+
+
 // RECHERCHE WEB RÉELLE d'un sujet d'actualité FRAIS pour un thème donné. C'est le
 // garde-fou anti-invention : le pipeline auto ne doit JAMAIS inventer un fait
 // (ex. "la BCE baisse ses taux" alors qu'elle les a haussés). On oblige le modèle
@@ -469,17 +551,24 @@ export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
 FAITS VÉRIFIÉS À RESPECTER SCRUPULEUSEMENT (n'en invente aucun autre, ne modifie aucun chiffre, ne change pas le SENS d'une décision) : ${fresh.faits}
 INTERDICTION ABSOLUE d'ajouter un chiffre, une date ou un fait qui ne figure pas ci-dessus. Si tu as besoin d'un détail non fourni, reste général plutôt que d'inventer.`;
 
+  // IDÉES 1+5+2 : choisir un angle + registre non répétés (mémoire 14j).
+  const { angle, register } = await pickAngleAndRegister(fresh.topic);
+  const editorialHint = buildEditorialHint(angle, register);
+  console.log(`[autoSlot] angle=${angle} registre=${register}`);
+
   const learningHint = await buildLearningHint(base);
   const s = await runScriptStep(slot, {
     topic: fresh.topic,
     newsTheme: fresh.topic,
     themeHint: theme.instruction + "\n\n" + factsHint,
     learningHint: learningHint || undefined,
+    editorialHint, angle, register,
     ...(publishAtIso !== undefined ? { publishAt: publishAtIso } : {}),
   });
   if (!s.ok) return { step: "script", ...s };
+  await recordEditorialChoice(fresh.topic, angle, register); // mémorise après succès
   const p = await runProductionStep(s.jobId, base);
-  return { step: "production", script: s, production: p, theme: theme.label, sourceEvent: fresh.topic, sourceDate: fresh.date };
+  return { step: "production", script: s, production: p, theme: theme.label, angle, register, sourceEvent: fresh.topic, sourceDate: fresh.date };
 }
 
 // PLAN QUOTIDIEN : quel thème et quel créneau pour chaque vidéo du jour.

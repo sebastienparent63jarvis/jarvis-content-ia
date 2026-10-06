@@ -6,6 +6,32 @@
 // Variable d'environnement requise sur Netlify :
 //   PEXELS_API_KEY : ta clé API Pexels (gratuite sur pexels.com/api)
 
+import { getStore } from "@netlify/blobs";
+
+function openMemStore() {
+  try { return getStore({ name: "jarvis-visual-memory", consistency: "strong" }); }
+  catch (e) {
+    const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
+    const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_API_TOKEN;
+    if (siteID && token) return getStore({ name: "jarvis-visual-memory", siteID, token, consistency: "strong" });
+    throw e;
+  }
+}
+
+// IDÉE 3 (version décor contextuel) : si un mot-clé contient un nom de
+// personnalité politique (détecté par majuscule initiale sur 2 mots + contexte),
+// Pexels ne trouvera pas la personne. On remplace par des décors évocateurs de
+// son monde (institutions, lieux de pouvoir) plutôt qu'un drapeau générique.
+const POLITICAL_DECORS = [
+  "national assembly chamber", "parliament building interior", "voting ballot box",
+  "political podium microphone", "election campaign crowd", "government building facade",
+  "press conference room", "senate hall",
+];
+function looksLikePerson(kw) {
+  // Heuristique : deux mots qui commencent par une majuscule (Prénom Nom).
+  return /\b[A-ZÀ-Ý][a-zà-ÿ]+\s+[A-ZÀ-Ý][a-zà-ÿ]+/.test(kw);
+}
+
 // Sélectionne le meilleur fichier vidéo d'un résultat Pexels :
 // on privilégie l'orientation portrait (9:16) et une résolution raisonnable
 // (HD, pas 4K pour limiter le poids et accélérer l'assemblage).
@@ -53,9 +79,31 @@ export default async (req, context) => {
     const results = [];
     const usedIds = new Set(); // évite de réutiliser le même clip dans une vidéo
 
+    // IDÉE 4 — Mémoire 7 jours : charge les clips déjà utilisés récemment pour
+    // ne pas les reprendre (fini le même drapeau US sur toutes les vidéos).
+    let recentIds = new Set();
+    let memStore = null;
+    const now = Date.now();
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    try {
+      memStore = openMemStore();
+      const log = (await memStore.get("used", { type: "json" })) || [];
+      for (const e of log) { if (now - e.at < sevenDays) recentIds.add(e.id); }
+    } catch { /* mémoire indisponible, on continue sans */ }
+    const newlyUsed = [];
+
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
-      const keywords = Array.isArray(seg.visual_keywords) ? seg.visual_keywords : [];
+      let keywords = Array.isArray(seg.visual_keywords) ? seg.visual_keywords : [];
+
+      // IDÉE 3 — Si un mot-clé ressemble à une personnalité, on remplace par des
+      // décors contextuels (Pexels n'a pas les visages de personnalités).
+      if (keywords.some(looksLikePerson)) {
+        const decor = POLITICAL_DECORS[Math.floor(Math.random() * POLITICAL_DECORS.length)];
+        const decor2 = POLITICAL_DECORS[Math.floor(Math.random() * POLITICAL_DECORS.length)];
+        keywords = [decor, decor2, ...keywords.filter(k => !looksLikePerson(k))];
+      }
+
       const query = keywords.join(" ") || (keywords[0] || "");
 
       let clip = null;
@@ -83,8 +131,11 @@ export default async (req, context) => {
 
         const data = await res.json();
         const videos = data.videos || [];
-        // On filtre les clips déjà utilisés dans cette vidéo pour ne pas répéter.
-        const fresh = videos.filter((v) => !usedIds.has(v.id));
+        // On exclut : les clips déjà pris dans CETTE vidéo ET ceux utilisés dans
+        // les 7 derniers jours (mémoire). Si tout est exclu, on relâche la mémoire
+        // 7j (mais jamais le doublon intra-vidéo) pour ne pas rester sans visuel.
+        let fresh = videos.filter((v) => !usedIds.has(v.id) && !recentIds.has(v.id));
+        if (fresh.length === 0) fresh = videos.filter((v) => !usedIds.has(v.id));
         const pool = fresh.length > 0 ? fresh : videos;
         if (pool.length > 0) {
           // Choix aléatoire dans un pool large (jusqu'à 15) → vraie diversité.
@@ -92,6 +143,7 @@ export default async (req, context) => {
           const file = pickBestVideoFile(chosen.video_files);
           if (file) {
             usedIds.add(chosen.id);
+            newlyUsed.push({ id: chosen.id, at: now });
             clip = {
               pexels_id: chosen.id,
               duration: chosen.duration,
@@ -116,6 +168,15 @@ export default async (req, context) => {
     }
 
     const missing = results.filter((r) => !r.clip).length;
+
+    // Enregistre les clips utilisés dans la mémoire 7 jours (purge le vieux).
+    if (memStore && newlyUsed.length) {
+      try {
+        const prev = (await memStore.get("used", { type: "json" })) || [];
+        const kept = prev.filter((e) => now - e.at < sevenDays);
+        await memStore.set("used", JSON.stringify([...newlyUsed, ...kept].slice(0, 2000)));
+      } catch { /* best effort */ }
+    }
 
     return new Response(
       JSON.stringify({ clips: results, total: results.length, missing }),
