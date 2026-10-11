@@ -61,14 +61,16 @@ export default async () => {
     for (const jid of jidx.slice(0, 8)) {
       const job = await jobs.get(jid, { type: "json" }).catch(() => null);
       if (!job) continue;
-      const row = { title: job.script?.title || "?", status: job.status, renderId: job.renderId || null, createdAt: job.createdAt };
-      // Si le job est en cours de montage, on demande à Shotstack où il en est.
-      if (job.status === "rendering" && job.renderId && apiKey) {
+      const row = { title: job.script?.title || "?", status: job.status, renderId: job.renderId || null, createdAt: job.createdAt, jobError: job.error || null };
+      // Pour TOUT job ayant un renderId (y compris "error"), on demande à Shotstack
+      // le détail : statut réel + message d'erreur exact (la cause du blocage).
+      if (job.renderId && apiKey) {
         try {
           const r = await fetch(`https://api.shotstack.io/${env}/render/${job.renderId}`, { headers: { "x-api-key": apiKey } });
           const d = await r.json();
           row.shotstack = d.response?.status || `http ${r.status}`;
           if (d.response?.error) row.shotstackError = d.response.error;
+          if (d.response?.data?.error) row.shotstackDataError = d.response.data.error;
           if (d.message && !d.response) row.shotstackMsg = d.message;
         } catch (e) { row.shotstack = "appel échoué: " + e.message; }
       }
