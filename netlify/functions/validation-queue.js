@@ -58,17 +58,25 @@ export default async (req, context) => {
     }
 
     if (action === "list") {
+      // On SCANNE toute la file (plus de plafond à 50 qui enterrait les vidéos
+      // à valider sous les déjà-décidées) et on collecte les "pending", les plus
+      // récentes d'abord. On plafonne seulement le NOMBRE RENVOYÉ, pas le scan.
       const ids = await readIndex(store);
+      const wantAll = !!body.all;
+      const MAX_RETURN = wantAll ? 200 : 80;
+      const MAX_SCAN = 500;
       const items = [];
-      for (const id of ids.slice(0, 50)) {
+      for (const id of ids.slice(0, MAX_SCAN)) {
         try {
           const it = await store.get(id, { type: "json" });
-          if (it) items.push(it);
+          if (!it) continue;
+          if (wantAll || it.status === "pending") {
+            items.push(it);
+            if (items.length >= MAX_RETURN) break;
+          }
         } catch { /* ignore l'entrée manquante */ }
       }
-      // Par défaut on ne renvoie que les "pending", sauf si all=true
-      const filtered = body.all ? items : items.filter(i => i.status === "pending");
-      return json({ items: filtered });
+      return json({ items });
     }
 
     if (action === "get") {
@@ -87,6 +95,11 @@ export default async (req, context) => {
       it.status = body.decision;
       it.decidedAt = new Date().toISOString();
       await store.set(body.id, JSON.stringify(it));
+      // Retire l'id de l'index : la file ne garde que les "pending", elle ne
+      // regrossit plus sans fin (le document reste en Blob pour l'historique).
+      const ids = await readIndex(store);
+      const next = ids.filter(x => x !== body.id);
+      if (next.length !== ids.length) await writeIndex(store, next);
       return json({ ok: true, item: it });
     }
 
