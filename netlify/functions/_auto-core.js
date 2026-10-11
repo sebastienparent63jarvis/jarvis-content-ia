@@ -465,7 +465,10 @@ Si rien de moins de 7 jours : { "trouve": false }.`;
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 1200,
+        // max_tokens ÉLEVÉ : la recherche web consomme beaucoup de tokens (requêtes,
+        // résultats, raisonnement) AVANT le JSON final. Trop bas (1200) → réponse
+        // coupée avant le JSON → faux échec. 4000 laisse la marge pour le JSON.
+        max_tokens: 4000,
         system: sys,
         messages: [{ role: "user", content: `Trouve un événement d'actualité réel, du thème "${theme.label}", datant de moins de 7 jours. Cherche sur le web, vérifie, puis réponds en JSON.` }],
         tools: [{ type: "web_search_20250305", name: "web_search" }],
@@ -538,37 +541,54 @@ export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
   const theme = THEMES[themeKey] || THEMES.geopolitique;
 
   // ÉTAPE ANTI-INVENTION : on cherche d'abord un vrai événement récent (<7j) sur
-  // le web. Sans ça, le modèle inventerait un fait plausible mais faux.
+  // le web, pour ancrer le script dans des faits vérifiés. MAIS cette recherche
+  // ne doit JAMAIS bloquer toute la production : si elle échoue, on se rabat sur
+  // une génération thématique avec de FORTES consignes anti-invention, plutôt que
+  // de ne produire aucune vidéo (ce qui arrivait avant ce correctif).
   const fresh = await findFreshTopic(themeKey);
-  if (fresh.error) {
-    console.log(`[autoSlot] pas de sujet frais pour ${themeKey} : ${fresh.error}`);
-    return { step: "recherche", error: "Aucun sujet d'actualité vérifié (<7j) trouvé : " + fresh.error };
-  }
-  console.log(`[autoSlot] sujet vérifié (${fresh.date}, ${fresh.source}) : ${fresh.topic}`);
 
-  // Consigne stricte anti-invention passée au générateur de script.
-  const factsHint = `SUJET IMPOSÉ (événement réel vérifié par recherche web, daté du ${fresh.date}, source : ${fresh.source}) : ${fresh.topic}
+  let factsHint, topicForGen, sourceEvent, sourceDate;
+  if (!fresh.error && fresh.topic) {
+    // Cas idéal : sujet réel vérifié. On impose les faits trouvés.
+    console.log(`[autoSlot] sujet vérifié (${fresh.date}, ${fresh.source}) : ${fresh.topic}`);
+    topicForGen = fresh.topic;
+    sourceEvent = fresh.topic;
+    sourceDate = fresh.date;
+    factsHint = `SUJET IMPOSÉ (événement réel vérifié par recherche web, daté du ${fresh.date}, source : ${fresh.source}) : ${fresh.topic}
 FAITS VÉRIFIÉS À RESPECTER SCRUPULEUSEMENT (n'en invente aucun autre, ne modifie aucun chiffre, ne change pas le SENS d'une décision) : ${fresh.faits}
 INTERDICTION ABSOLUE d'ajouter un chiffre, une date ou un fait qui ne figure pas ci-dessus. Si tu as besoin d'un détail non fourni, reste général plutôt que d'inventer.`;
+  } else {
+    // REPLI : la recherche n'a pas abouti. On produit quand même, mais on
+    // verrouille le modèle contre l'invention de faits précis non vérifiés.
+    console.log(`[autoSlot] REPLI thématique pour ${themeKey} (recherche: ${fresh.error || "sans sujet"})`);
+    topicForGen = undefined; // le modèle choisit un sujet dans le thème
+    sourceEvent = null; sourceDate = null;
+    factsHint = `GARDE-FOU FACTUEL STRICT (aucun sujet d'actualité n'a pu être vérifié par recherche web pour cette vidéo) :
+- Traite un enjeu DURABLE et BIEN ÉTABLI du thème, pas un événement daté précis.
+- N'invente AUCUN chiffre précis, AUCune date récente, AUCUNE décision ou déclaration que tu ne peux pas garantir comme exacte et toujours d'actualité.
+- Ne prétends JAMAIS qu'un événement vient de se produire ("vient de", "aujourd'hui", "cette semaine") si tu n'en es pas certain.
+- Préfère les mécanismes de fond, les tendances longues et les faits structurels, formulés prudemment. En cas de doute sur un fait, ne l'affirme pas.`;
+  }
 
   // IDÉES 1+5+2 : choisir un angle + registre non répétés (mémoire 14j).
-  const { angle, register } = await pickAngleAndRegister(fresh.topic);
+  const memoKey = sourceEvent || theme.label;
+  const { angle, register } = await pickAngleAndRegister(memoKey);
   const editorialHint = buildEditorialHint(angle, register);
   console.log(`[autoSlot] angle=${angle} registre=${register}`);
 
   const learningHint = await buildLearningHint(base);
   const s = await runScriptStep(slot, {
-    topic: fresh.topic,
-    newsTheme: fresh.topic,
+    topic: topicForGen,
+    newsTheme: topicForGen,
     themeHint: theme.instruction + "\n\n" + factsHint,
     learningHint: learningHint || undefined,
     editorialHint, angle, register,
     ...(publishAtIso !== undefined ? { publishAt: publishAtIso } : {}),
   });
   if (!s.ok) return { step: "script", ...s };
-  await recordEditorialChoice(fresh.topic, angle, register); // mémorise après succès
+  await recordEditorialChoice(memoKey, angle, register); // mémorise après succès
   const p = await runProductionStep(s.jobId, base);
-  return { step: "production", script: s, production: p, theme: theme.label, angle, register, sourceEvent: fresh.topic, sourceDate: fresh.date };
+  return { step: "production", script: s, production: p, theme: theme.label, angle, register, sourceEvent, sourceDate, grounded: !!sourceEvent };
 }
 
 // PLAN QUOTIDIEN : quel thème et quel créneau pour chaque vidéo du jour.
