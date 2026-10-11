@@ -35,13 +35,47 @@ export default async () => {
     out.cronGuard.parisToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date());
   } catch (e) { out.cronGuard.error = e.message; }
 
-  // 3. File de validation : combien de vidéos en attente ?
+  // 3. File de validation : combien de vidéos VRAIMENT en attente (status pending) ?
   try {
     const vq = open("jarvis-validation-queue");
     const idx = (await vq.get("_index", { type: "json" })) || [];
-    out.validation.pending = idx.length;
-    out.validation.ids = idx.slice(0, 10);
+    out.validation.indexLength = idx.length;
+    let pending = 0, decided = 0;
+    for (const id of idx.slice(0, 200)) {
+      const it = await vq.get(id, { type: "json" }).catch(() => null);
+      if (!it) continue;
+      if (it.status === "pending") pending++; else decided++;
+    }
+    out.validation.pending = pending;
+    out.validation.decided = decided;
   } catch (e) { out.validation.error = e.message; }
+
+  // 4. JOBS récents + état réel du montage Shotstack (le maillon suspect :
+  //    une vidéo "rendering" qui ne passe jamais "done" n'arrive jamais en file).
+  try {
+    const jobs = open("jarvis-auto-jobs");
+    const jidx = (await jobs.get("_index", { type: "json" })) || [];
+    const env = process.env.SHOTSTACK_ENV || "stage";
+    const apiKey = process.env.SHOTSTACK_API_KEY;
+    out.jobs = [];
+    for (const jid of jidx.slice(0, 8)) {
+      const job = await jobs.get(jid, { type: "json" }).catch(() => null);
+      if (!job) continue;
+      const row = { title: job.script?.title || "?", status: job.status, renderId: job.renderId || null, createdAt: job.createdAt };
+      // Si le job est en cours de montage, on demande à Shotstack où il en est.
+      if (job.status === "rendering" && job.renderId && apiKey) {
+        try {
+          const r = await fetch(`https://api.shotstack.io/${env}/render/${job.renderId}`, { headers: { "x-api-key": apiKey } });
+          const d = await r.json();
+          row.shotstack = d.response?.status || `http ${r.status}`;
+          if (d.response?.error) row.shotstackError = d.response.error;
+          if (d.message && !d.response) row.shotstackMsg = d.message;
+        } catch (e) { row.shotstack = "appel échoué: " + e.message; }
+      }
+      out.jobs.push(row);
+    }
+    out.shotstackEnv = env;
+  } catch (e) { out.jobs = { error: e.message }; }
 
   return new Response(JSON.stringify(out, null, 2), {
     status: 200, headers: { "Content-Type": "application/json; charset=utf-8" },
