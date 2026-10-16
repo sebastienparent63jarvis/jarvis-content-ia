@@ -425,6 +425,55 @@ export async function recordEditorialChoice(topic, angle, register) {
   } catch { /* best effort */ }
 }
 
+// ─── MÉMOIRE DES SUJETS (anti-répétition au niveau du SUJET, + refus) ─────────
+
+// Enregistre un sujet REFUSÉ par l'utilisateur, pour ne plus le reproposer.
+// Appelé par validation-queue quand une vidéo est rejetée.
+export async function recordRejectedTopic(title) {
+  if (!title) return;
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const log = (await store.get("rejected", { type: "json" })) || [];
+    log.unshift({ title: String(title).slice(0, 200), at: Date.now() });
+    await store.set("rejected", JSON.stringify(log.slice(0, 200)));
+  } catch { /* best effort */ }
+}
+
+// Fenêtre glissante de l'anti-répétition au niveau du sujet. Calée sur les 7
+// jours de fraîcheur de findFreshTopic : au-delà, un sujet n'est de toute façon
+// plus sélectionnable, et limiter à 7 jours évite que la liste "à éviter" grossisse
+// jusqu'à assécher le vivier de sujets.
+const AVOID_DAYS = 7;
+
+// Construit la liste des sujets à ÉVITER pour une nouvelle génération (7 jours) :
+//   - les titres REFUSÉS récemment — tous thèmes confondus,
+//   - les titres DÉJÀ PRODUITS récemment — pour ne pas répéter un sujet dominant
+//     jour après jour, même sans refus.
+export async function getAvoidTopics() {
+  const now = Date.now();
+  const cutoff = now - AVOID_DAYS * 24 * 60 * 60 * 1000;
+  const out = [];
+  // 1) Refusés (7 jours glissants).
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const rejected = (await store.get("rejected", { type: "json" })) || [];
+    for (const e of rejected) if (e.at >= cutoff && e.title) out.push(e.title);
+  } catch { /* ignore */ }
+  // 2) Déjà produits (7 jours glissants), lus depuis les jobs auto.
+  try {
+    const jobs = openStore("jarvis-auto-jobs");
+    const idx = (await jobs.get("_index", { type: "json" })) || [];
+    for (const jid of idx.slice(0, 60)) {
+      const job = await jobs.get(jid, { type: "json" }).catch(() => null);
+      if (!job?.script?.title) continue;
+      const t = job.createdAt ? new Date(job.createdAt).getTime() : now;
+      if (t >= cutoff) out.push(job.script.title);
+    }
+  } catch { /* ignore */ }
+  // Déduplique en gardant l'ordre (refusés d'abord).
+  return [...new Set(out)];
+}
+
 // Construit le bloc de consignes éditoriales (idées 1, 2, 5) pour le prompt.
 export function buildEditorialHint(angle, register) {
   return `CONSIGNES ÉDITORIALES DE VARIÉTÉ (impératif) :
@@ -441,10 +490,15 @@ export function buildEditorialHint(angle, register) {
 // à chercher sur le web un événement DATÉ de moins de 7 jours, et à renvoyer le
 // fait vérifié + sa date + sa source. Renvoie { topic, factue, date, source } ou
 // { error }.
-export async function findFreshTopic(themeKey) {
+export async function findFreshTopic(themeKey, avoidList = []) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "ANTHROPIC_API_KEY manquante" };
   const theme = THEMES[themeKey] || THEMES.geopolitique;
+
+  // Bloc des sujets à éviter (déjà traités récemment OU refusés par l'utilisateur).
+  const avoidBlock = (avoidList && avoidList.length)
+    ? `\n\nSUJETS DÉJÀ TRAITÉS OU REFUSÉS RÉCEMMENT — INTERDICTION ABSOLUE d'en choisir un identique ou proche. Choisis un événement sur un fait d'actualité VRAIMENT DIFFÉRENT (autre affaire, autre dossier). La liste :\n- ${avoidList.slice(0, 40).join("\n- ")}`
+    : "";
 
   const today = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full" }).format(new Date());
   const sys = `Tu es un chercheur d'actualité pour une chaîne YouTube. Tu utilises la recherche web pour trouver UN événement d'actualité RÉEL et RÉCENT.
@@ -453,11 +507,11 @@ RÈGLES ABSOLUES :
 - L'événement doit relever du thème imposé : ${theme.label}.
 - L'événement doit dater de MOINS DE 7 JOURS (nous sommes le ${today}). Si tu ne trouves rien d'aussi récent, dis-le, n'invente RIEN.
 - INTERDICTION FORMELLE d'inventer, de supposer ou d'extrapoler un fait. Chaque chiffre, chaque décision, chaque événement doit venir DIRECTEMENT d'une source web que tu as consultée. Si un fait n'est pas confirmé par ta recherche, ne l'affirme pas.
-- Vérifie le SENS des décisions (ex : une banque centrale qui "hausse" vs "baisse" ses taux — ne te fie pas à une tendance passée, lis la source réelle).
+- Vérifie le SENS des décisions (ex : une banque centrale qui "hausse" vs "baisse" ses taux — ne te fie pas à une tendance passée, lis la source réelle).${avoidBlock}
 
 Réponds UNIQUEMENT en JSON, sans texte autour :
 { "trouve": true/false, "titre_evenement": "l'événement en une phrase factuelle", "faits_verifies": "les faits clés vérifiés (chiffres, décisions, acteurs) tels que trouvés dans les sources", "date_evenement": "AAAA-MM-JJ", "source": "nom du média/source" }
-Si rien de moins de 7 jours : { "trouve": false }.`;
+Si rien de moins de 7 jours qui ne soit PAS dans la liste à éviter : { "trouve": false }.`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -545,7 +599,8 @@ export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
   // ne doit JAMAIS bloquer toute la production : si elle échoue, on se rabat sur
   // une génération thématique avec de FORTES consignes anti-invention, plutôt que
   // de ne produire aucune vidéo (ce qui arrivait avant ce correctif).
-  const fresh = await findFreshTopic(themeKey);
+  const avoid = await getAvoidTopics();
+  const fresh = await findFreshTopic(themeKey, avoid);
 
   let factsHint, topicForGen, sourceEvent, sourceDate;
   if (!fresh.error && fresh.topic) {

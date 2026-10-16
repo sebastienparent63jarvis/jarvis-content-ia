@@ -12,14 +12,14 @@
 
 import { getStore } from "@netlify/blobs";
 
-function openStore() {
+function openStore(name = "jarvis-validation-queue") {
   try {
-    return getStore({ name: "jarvis-validation-queue", consistency: "strong" });
+    return getStore({ name, consistency: "strong" });
   } catch (e) {
     const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
     const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_API_TOKEN;
     if (siteID && token) {
-      return getStore({ name: "jarvis-validation-queue", siteID, token, consistency: "strong" });
+      return getStore({ name, siteID, token, consistency: "strong" });
     }
     throw e;
   }
@@ -100,6 +100,15 @@ export default async (req, context) => {
       const ids = await readIndex(store);
       const next = ids.filter(x => x !== body.id);
       if (next.length !== ids.length) await writeIndex(store, next);
+      // Si REFUSÉ : on mémorise le sujet pour ne plus le reproposer en auto.
+      if (body.decision === "rejected" && it.title) {
+        try {
+          const mem = openStore("jarvis-topic-memory");
+          const log = (await mem.get("rejected", { type: "json" })) || [];
+          log.unshift({ title: String(it.title).slice(0, 200), at: Date.now() });
+          await mem.set("rejected", JSON.stringify(log.slice(0, 200)));
+        } catch { /* best effort */ }
+      }
       return json({ ok: true, item: it });
     }
 
