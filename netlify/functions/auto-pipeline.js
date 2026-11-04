@@ -31,14 +31,17 @@ export default async () => {
     try {
       const r = await fetch(`${base}/.netlify/functions/auto-produce-one-background`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme: plan.key }),
+        body: JSON.stringify({ id: plan.id, theme: plan.key, hour: plan.slot.hour, min: plan.slot.min }),
       });
-      console.log(`[cron] déclenché thème=${plan.key} → HTTP ${r.status}`);
-      triggered.push({ theme: plan.key, status: r.status });
+      console.log(`[cron] déclenché ${plan.id} (${plan.key} ${plan.slot.hour}:${plan.slot.min}) → HTTP ${r.status}`);
+      triggered.push({ id: plan.id, theme: plan.key, status: r.status });
     } catch (e) {
-      console.log(`[cron] ÉCHEC déclenchement thème=${plan.key} : ${e.message}`);
-      triggered.push({ theme: plan.key, error: e.message });
+      console.log(`[cron] ÉCHEC déclenchement ${plan.id} : ${e.message}`);
+      triggered.push({ id: plan.id, theme: plan.key, error: e.message });
     }
+    // Léger décalage entre déclenchements : évite que les 5 vidéos tapent
+    // l'étape voix exactement en même temps (limite ElevenLabs = 5 simultanés).
+    await new Promise(r => setTimeout(r, 1500));
   }
 
   return json({ triggered });

@@ -379,6 +379,21 @@ const ANGLE_KEYS = Object.keys(ANGLES);
 const REGISTER_KEYS = Object.keys(REGISTERS);
 const MEMORY_DAYS = 14; // mémoire anti-répétition
 
+// POIDS de performance (analyse d'octobre 2026 — vues médianes). On ne supprime
+// aucun angle/registre (la variété reste), on favorise simplement les gagnants.
+// À réévaluer chaque mois avec les nouvelles données.
+const ANGLE_WEIGHTS = { geopolitique: 3, historique: 2, economique: 2, prospectif: 1, humain: 1 };
+const REGISTER_WEIGHTS = { question_reponse: 3, avant_apres: 3, revelation: 2, trois_chiffres: 2, point_de_vue: 1 };
+
+// Tire un élément au hasard dans `keys`, pondéré par `weights` (défaut 1).
+function weightedPick(keys, weights) {
+  if (!keys.length) return null;
+  const total = keys.reduce((s, k) => s + (weights[k] || 1), 0);
+  let r = Math.random() * total;
+  for (const k of keys) { r -= (weights[k] || 1); if (r <= 0) return k; }
+  return keys[keys.length - 1];
+}
+
 // Normalise un macro-sujet pour la mémoire (minuscules, mots clés principaux).
 function macroKey(topic) {
   return (topic || "").toLowerCase().replace(/[^a-zàâäéèêëïîôöùûüç0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3).slice(0, 4).sort().join("-");
@@ -401,15 +416,14 @@ export async function pickAngleAndRegister(topic) {
     }
   } catch { /* mémoire vide */ }
 
-  // Angle : le premier non utilisé sur ce macro-sujet ; sinon le moins récent.
+  // Angle : parmi ceux non utilisés sur ce macro-sujet (anti-répétition), on tire
+  // au hasard PONDÉRÉ par la performance (les gagnants sortent plus souvent).
   const freeAngles = ANGLE_KEYS.filter(a => !usedAngles.includes(a));
-  const angle = freeAngles.length ? freeAngles[Math.floor(Math.random() * freeAngles.length)]
-    : ANGLE_KEYS[Math.floor(Math.random() * ANGLE_KEYS.length)];
+  const angle = weightedPick(freeAngles.length ? freeAngles : ANGLE_KEYS, ANGLE_WEIGHTS);
 
-  // Registre : on évite ceux utilisés récemment TOUS SUJETS (pour varier le ressenti global).
+  // Registre : parmi ceux non utilisés récemment (tous sujets), tirage pondéré.
   const freeRegisters = REGISTER_KEYS.filter(r => !allRecentRegisters.slice(0, 4).includes(r));
-  const register = freeRegisters.length ? freeRegisters[Math.floor(Math.random() * freeRegisters.length)]
-    : REGISTER_KEYS[Math.floor(Math.random() * REGISTER_KEYS.length)];
+  const register = weightedPick(freeRegisters.length ? freeRegisters : REGISTER_KEYS, REGISTER_WEIGHTS);
 
   return { angle, register };
 }
@@ -647,22 +661,29 @@ INTERDICTION ABSOLUE d'ajouter un chiffre, une date ou un fait qui ne figure pas
 }
 
 // PLAN QUOTIDIEN : quel thème et quel créneau pour chaque vidéo du jour.
+// 5 vidéos/jour. Créneaux calés sur les fenêtres fortes des Shorts (midi →
+// soirée ; matin évité). Orientation vers le thème gagnant (géopolitique ×3).
+// Chaque entrée a un id UNIQUE (les statuts ne s'écrasent plus, et le créneau
+// est transmis explicitement — fini le télescopage des thèmes dupliqués).
 export const DAILY_PLAN = [
-  { key: "geopolitique", slot: { hour: 8, min: 30 } },
-  { key: "societe", slot: { hour: 12, min: 30 } },
-  { key: "economie", slot: { hour: 19, min: 30 } },
+  { id: "geo-midi",  key: "geopolitique", slot: { hour: 11, min: 45 } },
+  { id: "societe",   key: "societe",      slot: { hour: 13, min: 30 } },
+  { id: "geo-aprem", key: "geopolitique", slot: { hour: 16, min: 30 } },
+  { id: "economie",  key: "economie",     slot: { hour: 18, min: 30 } },
+  { id: "geo-soir",  key: "geopolitique", slot: { hour: 20, min: 30 } },
 ];
 
 // Produit UNE SEULE vidéo (un thème). Utilisé par l'Option 2 : une background
 // function par vidéo, chacune avec ses 15 min. Trace chaque étape via console.log
 // (visible dans les logs Netlify de la fonction).
-export async function runOneVideo(themeKey, base) {
+export async function runOneVideo(themeKey, base, slotOverride) {
   const entry = DAILY_PLAN.find(p => p.key === themeKey) || DAILY_PLAN[0];
-  const { iso } = computeSlotToday(entry.slot.hour, entry.slot.min);
-  const slotLabel = `${entry.slot.hour}:${String(entry.slot.min).padStart(2, "0")}`;
+  const slot = slotOverride && slotOverride.hour != null ? slotOverride : entry.slot;
+  const { iso } = computeSlotToday(slot.hour, slot.min);
+  const slotLabel = `${slot.hour}:${String(slot.min).padStart(2, "0")}`;
   console.log(`[runOneVideo] DÉBUT thème=${themeKey} créneau=${slotLabel} publishAt=${iso}`);
   try {
-    const r = await runAutonomousSlot(entry.slot, themeKey, base, iso);
+    const r = await runAutonomousSlot(slot, themeKey, base, iso);
     if (r.production?.ok) {
       console.log(`[runOneVideo] OK thème=${themeKey} → rendering, renderId=${r.production.renderId}`);
     } else {

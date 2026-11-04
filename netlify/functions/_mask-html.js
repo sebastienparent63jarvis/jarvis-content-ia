@@ -10,9 +10,14 @@ export const BRAND = {
 };
 
 function esc(s) {
+  // On n'échappe PAS l'apostrophe : dans du texte HTML (et dans nos attributs,
+  // tous en guillemets doubles) une apostrophe littérale est sûre, et l'entité
+  // &#39; s'affichait parfois en "#39" sur l'image rendue. Apostrophe laissée telle.
+  // Par sécurité, on neutralise aussi une éventuelle entité &#39; déjà présente en amont.
   return String(s || "")
+    .replace(/&#0*39;/g, "'").replace(/&apos;/g, "'")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    .replace(/"/g, "&quot;");
 }
 
 // Construit le HTML complet du masque 1080x1920. Si bgUrl est fourni, il sert de

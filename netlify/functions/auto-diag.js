@@ -3,6 +3,7 @@
 // (garde anti-doublon) + la file de validation. Tout en une URL, lisible au
 // téléphone. Lecture seule.
 import { getStore } from "@netlify/blobs";
+import { DAILY_PLAN } from "./_auto-core.js";
 
 function open(name) {
   try { return getStore({ name, consistency: "strong" }); }
@@ -17,12 +18,12 @@ function open(name) {
 export default async () => {
   const out = { now: new Date().toISOString(), production: {}, cronGuard: {}, validation: {} };
 
-  // 1. Statut de chaque thème (dernière production individuelle).
+  // 1. Statut de chaque CRÉNEAU (dernière production individuelle, par id).
   try {
     const runs = open("jarvis-auto-runs");
-    for (const theme of ["geopolitique", "societe", "economie"]) {
-      const v = await runs.get(`last_one_${theme}`, { type: "json" });
-      out.production[theme] = v || "(jamais produit)";
+    for (const plan of DAILY_PLAN) {
+      const v = await runs.get(`last_one_${plan.id}`, { type: "json" });
+      out.production[plan.id] = v || "(jamais produit)";
     }
   } catch (e) { out.production.error = e.message; }
 
