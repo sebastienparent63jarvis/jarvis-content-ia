@@ -453,6 +453,20 @@ export async function recordRejectedTopic(title) {
   } catch { /* best effort */ }
 }
 
+// RÉSERVATION DE SUJET (anti-doublon INTRA-JOURNÉE). Chaque production, dès
+// qu'elle a choisi son sujet frais, l'écrit ici AVANT de produire — pour que les
+// vidéos "sœurs" du même matin (ex. 2 créneaux géo) ne reprennent pas le même
+// événement. Fenêtre courte (12 h) : ça ne concerne que la journée en cours.
+export async function recordClaimedTopic(title) {
+  if (!title) return;
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const log = (await store.get("claimed", { type: "json" })) || [];
+    log.unshift({ title: String(title).slice(0, 200), at: Date.now() });
+    await store.set("claimed", JSON.stringify(log.slice(0, 30)));
+  } catch { /* best effort */ }
+}
+
 // Fenêtre glissante de l'anti-répétition au niveau du sujet. Calée sur les 7
 // jours de fraîcheur de findFreshTopic : au-delà, un sujet n'est de toute façon
 // plus sélectionnable, et limiter à 7 jours évite que la liste "à éviter" grossisse
@@ -467,6 +481,13 @@ export async function getAvoidTopics() {
   const now = Date.now();
   const cutoff = now - AVOID_DAYS * 24 * 60 * 60 * 1000;
   const out = [];
+  // 0) Sujets RÉSERVÉS aujourd'hui (anti-doublon intra-journée, fenêtre 12 h).
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const claimed = (await store.get("claimed", { type: "json" })) || [];
+    const dayCut = now - 12 * 60 * 60 * 1000;
+    for (const e of claimed) if (e.at >= dayCut && e.title) out.push(e.title);
+  } catch { /* ignore */ }
   // 1) Refusés (7 jours glissants).
   try {
     const store = openStore("jarvis-topic-memory");
@@ -623,6 +644,9 @@ export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
     topicForGen = fresh.topic;
     sourceEvent = fresh.topic;
     sourceDate = fresh.date;
+    // RÉSERVE le sujet TOUT DE SUITE (avant la production) → les créneaux du même
+    // thème produits plus tard dans la matinée l'éviteront (anti-doublon même-jour).
+    await recordClaimedTopic(fresh.topic);
     factsHint = `SUJET IMPOSÉ (événement réel vérifié par recherche web, daté du ${fresh.date}, source : ${fresh.source}) : ${fresh.topic}
 FAITS VÉRIFIÉS À RESPECTER SCRUPULEUSEMENT (n'en invente aucun autre, ne modifie aucun chiffre, ne change pas le SENS d'une décision) : ${fresh.faits}
 INTERDICTION ABSOLUE d'ajouter un chiffre, une date ou un fait qui ne figure pas ci-dessus. Si tu as besoin d'un détail non fourni, reste général plutôt que d'inventer.`;
@@ -661,26 +685,32 @@ INTERDICTION ABSOLUE d'ajouter un chiffre, une date ou un fait qui ne figure pas
 }
 
 // PLAN QUOTIDIEN : quel thème et quel créneau pour chaque vidéo du jour.
-// 5 vidéos/jour. Créneaux calés sur les fenêtres fortes des Shorts (midi →
-// soirée ; matin évité). Orientation vers le thème gagnant (géopolitique ×3).
-// Chaque entrée a un id UNIQUE (les statuts ne s'écrasent plus, et le créneau
-// est transmis explicitement — fini le télescopage des thèmes dupliqués).
+// 4 vidéos/jour (2 géo + société + éco). Créneaux sur les fenêtres fortes des
+// Shorts (midi → soirée ; matin évité). Les 2 créneaux géo sont décalés à la
+// production (rang) + réservation de sujet → pas de doublon le même jour.
 export const DAILY_PLAN = [
-  { id: "geo-midi",  key: "geopolitique", slot: { hour: 11, min: 45 } },
-  { id: "societe",   key: "societe",      slot: { hour: 13, min: 30 } },
-  { id: "geo-aprem", key: "geopolitique", slot: { hour: 16, min: 30 } },
-  { id: "economie",  key: "economie",     slot: { hour: 18, min: 30 } },
-  { id: "geo-soir",  key: "geopolitique", slot: { hour: 20, min: 30 } },
+  { id: "geo-midi",  key: "geopolitique", slot: { hour: 12, min: 0 } },
+  { id: "societe",   key: "societe",      slot: { hour: 14, min: 0 } },
+  { id: "economie",  key: "economie",     slot: { hour: 17, min: 30 } },
+  { id: "geo-soir",  key: "geopolitique", slot: { hour: 20, min: 0 } },
 ];
 
 // Produit UNE SEULE vidéo (un thème). Utilisé par l'Option 2 : une background
 // function par vidéo, chacune avec ses 15 min. Trace chaque étape via console.log
 // (visible dans les logs Netlify de la fonction).
-export async function runOneVideo(themeKey, base, slotOverride) {
+export async function runOneVideo(themeKey, base, slotOverride, rank = 0) {
   const entry = DAILY_PLAN.find(p => p.key === themeKey) || DAILY_PLAN[0];
   const slot = slotOverride && slotOverride.hour != null ? slotOverride : entry.slot;
   const { iso } = computeSlotToday(slot.hour, slot.min);
   const slotLabel = `${slot.hour}:${String(slot.min).padStart(2, "0")}`;
+  // ANTI-DOUBLON : si plusieurs créneaux partagent le même thème (ex. 2 géo),
+  // le 2e (rank=1) attend que le 1er ait choisi ET réservé son sujet, pour piocher
+  // un événement DIFFÉRENT. findFreshTopic dure ~30-60 s, on attend donc 120 s/rang.
+  if (rank > 0) {
+    const waitMs = rank * 120000;
+    console.log(`[runOneVideo] thème=${themeKey} rang=${rank} → attente ${waitMs / 1000}s (anti-doublon même-jour)`);
+    await new Promise(r => setTimeout(r, waitMs));
+  }
   console.log(`[runOneVideo] DÉBUT thème=${themeKey} créneau=${slotLabel} publishAt=${iso}`);
   try {
     const r = await runAutonomousSlot(slot, themeKey, base, iso);

@@ -610,6 +610,15 @@ export default function JarvisApp() {
       }
       if (!final) throw new Error("délai d'upload dépassé — réessaie ou vérifie YouTube Studio");
       addToLog({ type: "PUBLICATION YOUTUBE", decision: `Publiée (auto) : "${item.title}"`, rationale: "Upload serveur, privé + planifié", kpi: "Auto ✓" });
+      // Multi-plateforme : on déclenche IG + Facebook + TikTok (brouillon) en
+      // arrière-plan, sans bloquer l'interface (le statut est consultable à part).
+      try {
+        await fetch("/.netlify/functions/crosspost-background", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: item.id, publishAtOverride: chosenDate || null }),
+        });
+        addToLog({ type: "MULTI-PLATEFORME", decision: `Envoyée vers Instagram, Facebook, TikTok (brouillon) : "${item.title}"`, rationale: "Upload-Post", kpi: "Auto ✓" });
+      } catch { /* le multi-plateforme ne doit pas casser la publication YouTube */ }
       await loadValidationQueue();
     } catch (e) {
       alert("Publication échouée : " + e.message);

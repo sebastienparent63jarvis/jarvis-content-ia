@@ -26,21 +26,25 @@ export default async () => {
   const base = (process.env.SITE_URL || process.env.URL || "https://jarviscontenuia.netlify.app").replace(/\/$/, "");
   const triggered = [];
 
-  // Déclenche UNE background par thème, en ATTENDANT le 202 de chacune.
+  // Déclenche UNE background par créneau. On calcule le RANG du créneau dans son
+  // thème (0 pour le 1er géo, 1 pour le 2e géo...) : le producteur s'en sert pour
+  // décaler les créneaux de même thème et éviter les doublons du même jour.
+  const themeCount = {};
   for (const plan of DAILY_PLAN) {
+    const rank = themeCount[plan.key] || 0;
+    themeCount[plan.key] = rank + 1;
     try {
       const r = await fetch(`${base}/.netlify/functions/auto-produce-one-background`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: plan.id, theme: plan.key, hour: plan.slot.hour, min: plan.slot.min }),
+        body: JSON.stringify({ id: plan.id, theme: plan.key, hour: plan.slot.hour, min: plan.slot.min, rank }),
       });
-      console.log(`[cron] déclenché ${plan.id} (${plan.key} ${plan.slot.hour}:${plan.slot.min}) → HTTP ${r.status}`);
-      triggered.push({ id: plan.id, theme: plan.key, status: r.status });
+      console.log(`[cron] déclenché ${plan.id} (${plan.key} rang=${rank}) → HTTP ${r.status}`);
+      triggered.push({ id: plan.id, theme: plan.key, rank, status: r.status });
     } catch (e) {
       console.log(`[cron] ÉCHEC déclenchement ${plan.id} : ${e.message}`);
       triggered.push({ id: plan.id, theme: plan.key, error: e.message });
     }
-    // Léger décalage entre déclenchements : évite que les 5 vidéos tapent
-    // l'étape voix exactement en même temps (limite ElevenLabs = 5 simultanés).
+    // Léger décalage entre déclenchements (évite le pic voix simultané ElevenLabs).
     await new Promise(r => setTimeout(r, 1500));
   }
 

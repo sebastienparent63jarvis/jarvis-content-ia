@@ -16,6 +16,7 @@ export default async (req) => {
   const theme = ["geopolitique", "societe", "economie"].includes(body.theme) ? body.theme : "geopolitique";
   const id = (body.id || theme).toString().slice(0, 40);
   const slot = (body.hour != null && body.min != null) ? { hour: body.hour, min: body.min } : undefined;
+  const rank = Number.isFinite(body.rank) ? body.rank : 0;
   const runId = `one-${id}-${Date.now()}`;
   const base = new URL(req.url).origin;
   const key = `last_one_${id}`;
@@ -26,7 +27,7 @@ export default async (req) => {
 
   let result;
   try {
-    result = await runOneVideo(theme, base, slot);
+    result = await runOneVideo(theme, base, slot, rank);
   } catch (e) {
     console.log(`[produce-one] EXCEPTION globale id=${id}: ${e.message}`);
     result = { error: e.message };
