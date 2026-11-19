@@ -37,9 +37,12 @@ export default async (req, context) => {
 
     const status = data.response?.status; // queued | fetching | rendering | saving | done | failed
     const videoUrl = data.response?.url || null;
-
+    const r = data.response || {};
+    const errorMsg = r.error || null;
+    const slim = { status: r.status, error: r.error || null, poster: r.poster, thumbnail: r.thumbnail };
+    // Shotstack expose parfois des erreurs par asset dans r.data? non ; on renvoie les meta utiles.
     return new Response(
-      JSON.stringify({ status, url: videoUrl }),
+      JSON.stringify({ status, url: videoUrl, error: errorMsg, meta: slim }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
