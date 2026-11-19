@@ -1,0 +1,783 @@
+// Cœur PARTAGÉ de la production autonome. Contient la logique (créneau, sujet,
+// script, calcul de la date de publication J+1) sans être lui-même une fonction
+// programmée — pour qu'on puisse le déclencher à la fois par le cron ET par une
+// fonction de test normale (les fonctions "scheduled" de Netlify renvoient 403
+// si on les ouvre par URL, donc impossibles à tester au navigateur).
+
+import { getStore } from "@netlify/blobs";
+import { SHORTS_SYSTEM_PROMPT, buildUserPrompt, extractScript } from "./_script-core.js";
+
+// Heure de Paris courante (gère UTC+1/UTC+2 automatiquement via Intl).
+export function parisNow() {
+  const parts = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const h = parseInt(parts.find(p => p.type === "hour").value, 10);
+  const m = parseInt(parts.find(p => p.type === "minute").value, 10);
+  return { h, m };
+}
+
+export function openStore(name) {
+  try { return getStore({ name, consistency: "strong" }); }
+  catch (e) {
+    const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
+    const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_API_TOKEN;
+    if (siteID && token) return getStore({ name, siteID, token, consistency: "strong" });
+    throw e;
+  }
+}
+
+// Décalage (minutes) de l'heure de Paris par rapport à UTC pour une date donnée.
+function parisOffsetMinutes(date) {
+  const tzStr = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Paris", timeZoneName: "shortOffset" })
+    .formatToParts(date).find(p => p.type === "timeZoneName")?.value || "GMT+1";
+  const m = tzStr.match(/GMT([+-]\d+)/);
+  return m ? parseInt(m[1], 10) * 60 : 60;
+}
+
+// Publication le LENDEMAIN à hh:mm heure de Paris, renvoyée en ISO (UTC).
+export function computePublishNextDay(hour, min) {
+  const now = new Date();
+  const parisDateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, mo, d] = parisDateStr.split("-").map(Number);
+  const next = new Date(Date.UTC(y, mo - 1, d + 1, hour, min));
+  const offsetMin = parisOffsetMinutes(next);
+  next.setUTCMinutes(next.getUTCMinutes() - offsetMin);
+  return next.toISOString();
+}
+
+// MODE MANUEL : prochain créneau (8h30 / 12h30 / 19h30) encore disponible
+// AUJOURD'HUI en heure de Paris. Renvoie l'ISO du créneau, ou null s'il n'y a
+// plus de créneau aujourd'hui (après 19h30) → l'utilisateur choisira la date.
+export function computeNextSlotToday() {
+  const SLOTS = [{ h: 8, m: 30 }, { h: 12, m: 30 }, { h: 19, m: 30 }];
+  const { h, m } = parisNow();
+  const nowMin = h * 60 + m;
+  // On garde une petite marge (2 min) pour éviter de viser un créneau qui vient
+  // juste de passer et serait déjà "dans le passé" pour YouTube.
+  const slot = SLOTS.find(s => (s.h * 60 + s.m) > nowMin + 2);
+  if (!slot) return null; // plus de créneau aujourd'hui
+
+  const now = new Date();
+  const parisDateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, mo, d] = parisDateStr.split("-").map(Number);
+  const target = new Date(Date.UTC(y, mo - 1, d, slot.h, slot.m));
+  const offsetMin = parisOffsetMinutes(target);
+  target.setUTCMinutes(target.getUTCMinutes() - offsetMin);
+  return target.toISOString();
+}
+
+// Créneau PRÉCIS aujourd'hui (heure de Paris) en ISO. Renvoie {iso, passed}.
+// passed=true si l'heure est déjà dépassée (marge 3 min) — utile pour décaler
+// une vidéo validée trop tard vers le créneau suivant.
+export function computeSlotToday(hour, min) {
+  const now = new Date();
+  const parisDateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, mo, d] = parisDateStr.split("-").map(Number);
+  const target = new Date(Date.UTC(y, mo - 1, d, hour, min));
+  const offsetMin = parisOffsetMinutes(target);
+  target.setUTCMinutes(target.getUTCMinutes() - offsetMin);
+  const passed = target.getTime() <= Date.now() + 3 * 60 * 1000;
+  return { iso: target.toISOString(), passed };
+}
+
+// Produit le SCRIPT du jour et range un job. `slot` = { hour, min }.
+// Renvoie { ok, jobId, title, publishAt } ou { error }.
+export async function runScriptStep(slot, opts = {}) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { error: "ANTHROPIC_API_KEY manquante" };
+
+  // Anti-doublon : titres récents (élargi à 30 pour l'autonome).
+  let recentTopics = [];
+  try {
+    const histStore = openStore("jarvis-scripts");
+    const idx = (await histStore.get("_index", { type: "json" })) || [];
+    for (const id of idx.slice(0, 30)) {
+      const it = await histStore.get(id, { type: "json" });
+      if (it?.script?.title) recentTopics.push(it.script.title);
+    }
+  } catch { /* historique vide, pas grave */ }
+
+  // Génère le script. En manuel, un sujet/thème peut être IMPOSÉ (opts.topic).
+  // Sinon (autonome), le modèle choisit lui-même, MAIS dans le méta-thème imposé
+  // du créneau (opts.themeHint) et guidé par ce qui performe (opts.learningHint).
+  let userPrompt = buildUserPrompt({
+    recentTopics,
+    topic: opts.topic || undefined,
+    newsTheme: opts.newsTheme || undefined,
+  });
+  if (opts.themeHint) userPrompt += "\n\n" + opts.themeHint;
+  if (opts.learningHint) userPrompt += "\n\n" + opts.learningHint;
+  if (opts.editorialHint) userPrompt += "\n\n" + opts.editorialHint;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 2000, system: SHORTS_SYSTEM_PROMPT, messages: [{ role: "user", content: userPrompt }] }),
+  });
+  const data = await res.json();
+  if (!res.ok) return { error: data.error?.message || "Erreur API script" };
+  const textPart = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+  let script;
+  try { script = extractScript(textPart); }
+  catch { return { error: "Script non conforme (JSON)" }; }
+
+  // Range le job. publishAt : si la clé est explicitement fournie dans opts (même
+  // null), on la respecte ; sinon (autonome), on planifie J+1 au créneau.
+  const jobStore = openStore("jarvis-auto-jobs");
+  const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const publishAt = ("publishAt" in opts) ? opts.publishAt : computePublishNextDay(slot.hour, slot.min);
+  const job = {
+    id: jobId, status: "script_done", createdAt: new Date().toISOString(),
+    slot: opts.topic ? "manuel" : `${slot.hour}:${String(slot.min).padStart(2, "0")}`, publishAt, script,
+    angle: opts.angle || null, register: opts.register || null, // pour l'export/analyse
+  };
+  await jobStore.set(jobId, JSON.stringify(job));
+  const jIdx = (await jobStore.get("_index", { type: "json" })) || [];
+  jIdx.unshift(jobId);
+  await jobStore.set("_index", JSON.stringify(jIdx));
+
+  return { ok: true, step: "script_done", jobId, title: script.title, publishAt };
+}
+
+// TEMPS A : à partir d'un job "script_done", enchaîne voix (par segment) →
+// visuels Pexels → images de marque (HCTI) → LANCEMENT du montage Shotstack.
+// Réutilise les endpoints existants (logique testée) via HTTP interne. Le montage
+// étant asynchrone, on stocke le render_id ; le Temps B récupérera la vidéo finie.
+// `base` = origine du site (ex https://xxx.netlify.app), pour les appels internes.
+export async function runProductionStep(jobId, base) {
+  const jobStore = openStore("jarvis-auto-jobs");
+  const job = await jobStore.get(jobId, { type: "json" });
+  if (!job) return { error: "job introuvable" };
+  const script = job.script;
+  const segments = script.narration_segments || [];
+  if (segments.length === 0) return { error: "script sans segments" };
+
+  const post = async (path, body) => {
+    const r = await fetch(`${base}${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const txt = await r.text();
+    let d; try { d = JSON.parse(txt); } catch { throw new Error(`${path} → réponse non JSON (${r.status})`); }
+    if (!r.ok) throw new Error(`${path} → ${d.error || r.status}`);
+    return d;
+  };
+
+  try {
+    // 1. VOIX : séquentiel par vidéo (1 appel à la fois). En Option 2, jusqu'à 3
+    // vidéos tournent EN PARALLÈLE (une background chacune) ; avec 1 appel voix
+    // concurrent par vidéo, on a au pire 3 appels ElevenLabs simultanés — sous la
+    // limite de 5. Chaque vidéo ayant désormais 15 min propres, la lenteur du
+    // séquentiel n'est plus un problème (c'était le cas quand tout tenait dans une
+    // seule fonction). Robuste contre le 429.
+    const audioSegments = [];
+    for (let i = 0; i < segments.length; i++) {
+      const a = await post("/api/generate-audio", { text: segments[i].text });
+      const h = await post("/api/store-audio", { audio_base64: a.audio_base64 });
+      audioSegments.push({ index: i, url: h.url, duration: estimateDurationFromChars(segments[i].text) });
+    }
+
+    // 2. VISUELS Pexels.
+    const vis = await post("/api/fetch-visuals", { segments });
+    const clips = vis.clips || [];
+    const firstPreview = clips.find(c => c.clip && c.clip.preview);
+
+    // 3. IMAGES DE MARQUE (intro incrustée sur 1re image Pexels + outro).
+    let introMaskUrl = null, outroImgUrl = null;
+    try {
+      const bi = await post("/api/generate-brand-images", {
+        title: script.title, category: script.category, word: script.thumbnail_word,
+        bgImage: firstPreview ? firstPreview.clip.preview : undefined,
+      });
+      introMaskUrl = bi.introMaskUrl; outroImgUrl = bi.outroImgUrl;
+    } catch { /* on continue sans intro/outro plutôt que bloquer */ }
+
+    // 4. LANCE le montage Shotstack (asynchrone → on récupère un render_id).
+    const asm = await post("/api/assemble-video", {
+      audioSegments, segments, clips,
+      title: script.title, category: script.category, word: script.thumbnail_word,
+      introMaskUrl, outroImgUrl,
+    });
+    const renderId = asm.render_id;
+    if (!renderId) throw new Error("assemble-video n'a pas renvoyé de render_id");
+
+    // 5. Met à jour le job : montage lancé, en attente du rendu (Temps B).
+    job.status = "rendering";
+    job.renderId = renderId;
+    job.renderEnv = asm.env || "stage";
+    job.audioSegments = audioSegments;
+    job.updatedAt = new Date().toISOString();
+    await jobStore.set(jobId, JSON.stringify(job));
+
+    return { ok: true, step: "rendering", jobId, renderId, title: script.title };
+  } catch (e) {
+    job.status = "error"; job.error = e.message; job.updatedAt = new Date().toISOString();
+    await jobStore.set(jobId, JSON.stringify(job));
+    return { error: e.message, jobId };
+  }
+}
+
+// Estimation de durée (s) d'un segment à partir du nb de caractères (~15 c/s FR).
+function estimateDurationFromChars(text) {
+  return Math.max(1.5, Math.round(((text || "").length / 15) * 10) / 10);
+}
+
+// TEMPS B : parcourt les jobs "rendering", vérifie si leur montage Shotstack est
+// terminé ; pour chaque vidéo prête, la range dans la file de VALIDATION et
+// envoie le MAIL de notification. Renvoie un résumé de ce qui a été traité.
+export async function runCollectStep(base) {
+  const jobStore = openStore("jarvis-auto-jobs");
+  const idx = (await jobStore.get("_index", { type: "json" })) || [];
+  const env = process.env.SHOTSTACK_ENV || "stage";
+  const apiKey = process.env.SHOTSTACK_API_KEY;
+  const notifyEmail = process.env.NOTIFY_EMAIL || null;
+
+  const processed = [];
+  for (const jobId of idx.slice(0, 30)) {
+    let job;
+    try { job = await jobStore.get(jobId, { type: "json" }); } catch { continue; }
+    if (!job || job.status !== "rendering" || !job.renderId) continue;
+
+    // Vérifie l'état du rendu Shotstack.
+    let videoUrl = null;
+    try {
+      const r = await fetch(`https://api.shotstack.io/${env}/render/${job.renderId}`, {
+        headers: { "x-api-key": apiKey },
+      });
+      const d = await r.json();
+      const st = d.response?.status;
+      if (st === "done") videoUrl = d.response?.url;
+      else if (st === "failed") {
+        job.status = "error"; job.error = "montage Shotstack échoué";
+        await jobStore.set(jobId, JSON.stringify(job));
+        processed.push({ jobId, result: "render_failed" });
+        continue;
+      } else {
+        // encore en cours (queued/rendering) → on laisse pour le prochain passage
+        continue;
+      }
+    } catch (e) {
+      continue; // on retentera au prochain passage
+    }
+
+    if (!videoUrl) continue;
+
+    // Range dans la file de validation.
+    try {
+      await fetch(`${base}/api/validation-queue`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add",
+          item: {
+            title: job.script?.title || "Actu Crue",
+            description: job.script?.description || "",
+            videoUrl,
+            publishAt: job.publishAt,
+            slot: job.slot,
+            sourceJobId: jobId,
+          },
+        }),
+      });
+    } catch (e) {
+      processed.push({ jobId, result: "queue_error: " + e.message });
+      continue;
+    }
+
+    // Marque le job comme terminé (mis en file).
+    job.status = "queued_for_validation";
+    job.videoUrl = videoUrl;
+    job.updatedAt = new Date().toISOString();
+    await jobStore.set(jobId, JSON.stringify(job));
+
+    // Mail par vidéo : DÉSACTIVÉ par défaut (on préfère un récap unique à 7h via
+    // auto-notify). Réactivable en mettant PER_VIDEO_EMAIL=1 dans Netlify.
+    const perVideoEmail = process.env.PER_VIDEO_EMAIL === "1";
+    if (notifyEmail && perVideoEmail) {
+      try {
+        const publishStr = job.publishAt
+          ? new Date(job.publishAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+          : "à définir";
+        await fetch(`${base}/api/send-email`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: notifyEmail,
+            subject: `Actu Crue — vidéo à valider : ${job.script?.title || ""}`.slice(0, 120),
+            html: `<div style="font-family:system-ui,sans-serif;max-width:520px">
+              <h2 style="color:#7D4698">Ta vidéo du jour est prête</h2>
+              <p style="font-size:16px;font-weight:600">${escapeHtmlLite(job.script?.title || "")}</p>
+              <p style="color:#555;line-height:1.6">Elle t'attend dans l'onglet <b>À valider</b> de l'app. Publie-la (privé + planifié pour le ${publishStr}) ou rejette-la.</p>
+              <p><a href="${base}/" style="display:inline-block;background:#7D4698;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Ouvrir Actu Crue →</a></p>
+            </div>`,
+          }),
+        });
+      } catch { /* mail best-effort */ }
+    }
+
+    processed.push({ jobId, result: "queued", title: job.script?.title, videoUrl });
+  }
+
+  return { ok: true, processedCount: processed.length, processed, notifyEmail: !!notifyEmail };
+}
+
+function escapeHtmlLite(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ─── AUTONOME : méta-thèmes par créneau + boucle d'auto-amélioration ─────────
+
+// Définition des méta-thèmes imposés (un par créneau).
+export const THEMES = {
+  geopolitique: {
+    label: "Géopolitique internationale",
+    instruction: "MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : GÉOPOLITIQUE INTERNATIONALE (tensions entre États, conflits, diplomatie, équilibres de puissance mondiaux). Le sujet DOIT relever de ce thème.",
+  },
+  societe: {
+    label: "Société & vie politique",
+    instruction: `MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : SOCIÉTÉ & VIE POLITIQUE (débats de société, politique intérieure, grandes tendances sociales, décisions publiques qui touchent le quotidien). Le sujet DOIT relever de ce thème.
+
+RÈGLES ÉDITORIALES STRICTES POUR CE THÈME (pour éviter le bridage de distribution par YouTube sur les sujets sensibles) :
+- ANGLE FACTUEL ET CONSTRUCTIF, jamais "révélation d'une manipulation cachée". Explique un fait de société et ce qu'il change concrètement, sans sous-entendre qu'une vérité est dissimulée au spectateur.
+- VOCABULAIRE INTERDIT (déclenche la modération) : "manipulation", "manipuler", "on te ment", "ce qu'on te cache", "insidieux", "mécanisme caché", "vérité qu'on te cache", "les médias mentent", "sans que tu t'en aperçoives", "un mensonge répété", "ta seule vraie liberté", "réveille-toi", "ils ne veulent pas que tu saches". Ces tournures font passer la vidéo pour du contenu complotiste.
+- SUJETS À ÉVITER absolument : le déroulé d'une élection à venir (qui va gagner, qui est favorisé), la critique frontale des médias ou de leur "agenda", les théories sur le contrôle de l'opinion. Ce sont les sujets les plus bridés.
+- SUJETS À PRIVILÉGIER : phénomènes de société larges et universels (éducation, santé publique, travail, logement, environnement du quotidien, évolutions démographiques, modes de vie, nouvelles lois concrètes et leurs effets pratiques). Ces sujets sont riches, engageants ET librement distribués.
+- Reste incarné et percutant, mais par la CLARTÉ et l'ENJEU RÉEL, jamais par le soupçon ou la dénonciation d'un complot.`,
+  },
+  economie: {
+    label: "Économie",
+    instruction: "MÉTA-THÈME IMPOSÉ POUR CETTE VIDÉO : ÉCONOMIE (marchés, entreprises, prix, pouvoir d'achat, décisions économiques et leurs effets concrets). Le sujet DOIT relever de ce thème.",
+  },
+};
+
+// Rotation FIXE des thèmes par créneau horaire (heure de Paris).
+export const SLOT_THEMES = {
+  "8:30": "geopolitique",
+  "12:30": "societe",
+  "19:30": "economie",
+};
+
+// ─── VARIÉTÉ ÉDITORIALE (5 idées) ────────────────────────────────────────────
+
+// IDÉE 1 — Angles d'attaque. Un même macro-sujet traité différemment.
+export const ANGLES = {
+  economique: "ANGLE ÉCONOMIQUE : traite le sujet par l'argent, les coûts, les gagnants/perdants financiers, les chiffres clés.",
+  humain: "ANGLE HUMAIN/INCARNÉ : raconte le sujet à travers une personne, un métier, un lieu précis qui le vit concrètement.",
+  historique: "ANGLE HISTORIQUE : explique comment on en est arrivé là, la racine du problème, le précédent qui éclaire aujourd'hui.",
+  prospectif: "ANGLE PROSPECTIF : projette les conséquences à venir, ce qui va changer dans les mois/années qui viennent.",
+  geopolitique: "ANGLE RAPPORTS DE FORCE : qui gagne du pouvoir, qui en perd, les alliances, les enjeux de domination.",
+};
+
+// IDÉE 5 — Registres narratifs. Même fond, structure de récit différente.
+export const REGISTERS = {
+  question_reponse: "STRUCTURE QUESTION-RÉPONSE : ouvre sur une énigme/question intrigante, puis déroule la réponse.",
+  avant_apres: "STRUCTURE AVANT/APRÈS : montre comment c'était, puis ce qui a basculé, puis ce que ça donne maintenant.",
+  trois_chiffres: "STRUCTURE 3 CHIFFRES : articule tout le récit autour de 3 chiffres/faits marquants qui disent l'essentiel.",
+  point_de_vue: "STRUCTURE POINT DE VUE : raconte depuis celui qui subit ou vit la situation, à hauteur d'humain.",
+  revelation: "STRUCTURE RÉVÉLATION : part d'un fait apparent, puis dévoile un angle inattendu que personne ne voit.",
+};
+
+const ANGLE_KEYS = Object.keys(ANGLES);
+const REGISTER_KEYS = Object.keys(REGISTERS);
+const MEMORY_DAYS = 14; // mémoire anti-répétition
+
+// POIDS de performance (analyse d'octobre 2026 — vues médianes). On ne supprime
+// aucun angle/registre (la variété reste), on favorise simplement les gagnants.
+// À réévaluer chaque mois avec les nouvelles données.
+const ANGLE_WEIGHTS = { geopolitique: 3, historique: 2, economique: 2, prospectif: 1, humain: 1 };
+const REGISTER_WEIGHTS = { question_reponse: 3, avant_apres: 3, revelation: 2, trois_chiffres: 2, point_de_vue: 1 };
+
+// Tire un élément au hasard dans `keys`, pondéré par `weights` (défaut 1).
+function weightedPick(keys, weights) {
+  if (!keys.length) return null;
+  const total = keys.reduce((s, k) => s + (weights[k] || 1), 0);
+  let r = Math.random() * total;
+  for (const k of keys) { r -= (weights[k] || 1); if (r <= 0) return k; }
+  return keys[keys.length - 1];
+}
+
+// Normalise un macro-sujet pour la mémoire (minuscules, mots clés principaux).
+function macroKey(topic) {
+  return (topic || "").toLowerCase().replace(/[^a-zàâäéèêëïîôöùûüç0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3).slice(0, 4).sort().join("-");
+}
+
+// IDÉE 1+5 — Choisit un angle et un registre NON utilisés récemment sur ce
+// macro-sujet (mémoire 14j), pour éviter de refaire le même traitement.
+export async function pickAngleAndRegister(topic) {
+  const key = macroKey(topic);
+  const now = Date.now();
+  const cutoff = now - MEMORY_DAYS * 24 * 60 * 60 * 1000;
+  let usedAngles = [], usedRegisters = [], allRecentRegisters = [];
+  try {
+    const store = openStore("jarvis-editorial-memory");
+    const log = (await store.get("log", { type: "json" })) || [];
+    for (const e of log) {
+      if (e.at < cutoff) continue;
+      allRecentRegisters.push(e.register); // registres récents, tous sujets
+      if (e.macro === key) { usedAngles.push(e.angle); usedRegisters.push(e.register); }
+    }
+  } catch { /* mémoire vide */ }
+
+  // Angle : parmi ceux non utilisés sur ce macro-sujet (anti-répétition), on tire
+  // au hasard PONDÉRÉ par la performance (les gagnants sortent plus souvent).
+  const freeAngles = ANGLE_KEYS.filter(a => !usedAngles.includes(a));
+  const angle = weightedPick(freeAngles.length ? freeAngles : ANGLE_KEYS, ANGLE_WEIGHTS);
+
+  // Registre : parmi ceux non utilisés récemment (tous sujets), tirage pondéré.
+  const freeRegisters = REGISTER_KEYS.filter(r => !allRecentRegisters.slice(0, 4).includes(r));
+  const register = weightedPick(freeRegisters.length ? freeRegisters : REGISTER_KEYS, REGISTER_WEIGHTS);
+
+  return { angle, register };
+}
+
+// Enregistre le choix (angle+registre+macro) dans la mémoire 14j.
+export async function recordEditorialChoice(topic, angle, register) {
+  try {
+    const store = openStore("jarvis-editorial-memory");
+    const log = (await store.get("log", { type: "json" })) || [];
+    log.unshift({ macro: macroKey(topic), angle, register, at: Date.now() });
+    // On garde ~120 entrées (largement > 14j même à 5/jour).
+    await store.set("log", JSON.stringify(log.slice(0, 120)));
+  } catch { /* best effort */ }
+}
+
+// ─── MÉMOIRE DES SUJETS (anti-répétition au niveau du SUJET, + refus) ─────────
+
+// Enregistre un sujet REFUSÉ par l'utilisateur, pour ne plus le reproposer.
+// Appelé par validation-queue quand une vidéo est rejetée.
+export async function recordRejectedTopic(title) {
+  if (!title) return;
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const log = (await store.get("rejected", { type: "json" })) || [];
+    log.unshift({ title: String(title).slice(0, 200), at: Date.now() });
+    await store.set("rejected", JSON.stringify(log.slice(0, 200)));
+  } catch { /* best effort */ }
+}
+
+// RÉSERVATION DE SUJET (anti-doublon INTRA-JOURNÉE). Chaque production, dès
+// qu'elle a choisi son sujet frais, l'écrit ici AVANT de produire — pour que les
+// vidéos "sœurs" du même matin (ex. 2 créneaux géo) ne reprennent pas le même
+// événement. Fenêtre courte (12 h) : ça ne concerne que la journée en cours.
+export async function recordClaimedTopic(title) {
+  if (!title) return;
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const log = (await store.get("claimed", { type: "json" })) || [];
+    log.unshift({ title: String(title).slice(0, 200), at: Date.now() });
+    await store.set("claimed", JSON.stringify(log.slice(0, 30)));
+  } catch { /* best effort */ }
+}
+
+// Fenêtre glissante de l'anti-répétition au niveau du sujet. Calée sur les 7
+// jours de fraîcheur de findFreshTopic : au-delà, un sujet n'est de toute façon
+// plus sélectionnable, et limiter à 7 jours évite que la liste "à éviter" grossisse
+// jusqu'à assécher le vivier de sujets.
+const AVOID_DAYS = 7;
+
+// Construit la liste des sujets à ÉVITER pour une nouvelle génération (7 jours) :
+//   - les titres REFUSÉS récemment — tous thèmes confondus,
+//   - les titres DÉJÀ PRODUITS récemment — pour ne pas répéter un sujet dominant
+//     jour après jour, même sans refus.
+export async function getAvoidTopics() {
+  const now = Date.now();
+  const cutoff = now - AVOID_DAYS * 24 * 60 * 60 * 1000;
+  const out = [];
+  // 0) Sujets RÉSERVÉS aujourd'hui (anti-doublon intra-journée, fenêtre 12 h).
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const claimed = (await store.get("claimed", { type: "json" })) || [];
+    const dayCut = now - 12 * 60 * 60 * 1000;
+    for (const e of claimed) if (e.at >= dayCut && e.title) out.push(e.title);
+  } catch { /* ignore */ }
+  // 1) Refusés (7 jours glissants).
+  try {
+    const store = openStore("jarvis-topic-memory");
+    const rejected = (await store.get("rejected", { type: "json" })) || [];
+    for (const e of rejected) if (e.at >= cutoff && e.title) out.push(e.title);
+  } catch { /* ignore */ }
+  // 2) Déjà produits (7 jours glissants), lus depuis les jobs auto.
+  try {
+    const jobs = openStore("jarvis-auto-jobs");
+    const idx = (await jobs.get("_index", { type: "json" })) || [];
+    for (const jid of idx.slice(0, 60)) {
+      const job = await jobs.get(jid, { type: "json" }).catch(() => null);
+      if (!job?.script?.title) continue;
+      const t = job.createdAt ? new Date(job.createdAt).getTime() : now;
+      if (t >= cutoff) out.push(job.script.title);
+    }
+  } catch { /* ignore */ }
+  // Déduplique en gardant l'ordre (refusés d'abord).
+  return [...new Set(out)];
+}
+
+// Construit le bloc de consignes éditoriales (idées 1, 2, 5) pour le prompt.
+export function buildEditorialHint(angle, register) {
+  return `CONSIGNES ÉDITORIALES DE VARIÉTÉ (impératif) :
+- ${ANGLES[angle] || ANGLES.humain}
+- ${REGISTERS[register] || REGISTERS.question_reponse}
+- ZOOM MICRO OBLIGATOIRE (idée clé) : n'ouvre JAMAIS sur une abstraction ("le monde bascule", "la France à bout"). Commence par un point d'entrée CONCRET, PRÉCIS et INCARNÉ — une personne, un lieu, un chiffre, une scène réelle — puis élargis vers le macro-sujet. Le général se raconte par le particulier.
+- Reste factuel et vérifié, sans vocabulaire complotiste ni hyperbole.`;
+}
+
+
+// RECHERCHE WEB RÉELLE d'un sujet d'actualité FRAIS pour un thème donné. C'est le
+// garde-fou anti-invention : le pipeline auto ne doit JAMAIS inventer un fait
+// (ex. "la BCE baisse ses taux" alors qu'elle les a haussés). On oblige le modèle
+// à chercher sur le web un événement DATÉ de moins de 7 jours, et à renvoyer le
+// fait vérifié + sa date + sa source. Renvoie { topic, factue, date, source } ou
+// { error }.
+export async function findFreshTopic(themeKey, avoidList = []) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { error: "ANTHROPIC_API_KEY manquante" };
+  const theme = THEMES[themeKey] || THEMES.geopolitique;
+
+  // Bloc des sujets à éviter (déjà traités récemment OU refusés par l'utilisateur).
+  const avoidBlock = (avoidList && avoidList.length)
+    ? `\n\nSUJETS DÉJÀ TRAITÉS OU REFUSÉS RÉCEMMENT — INTERDICTION ABSOLUE d'en choisir un identique ou proche. Choisis un événement sur un fait d'actualité VRAIMENT DIFFÉRENT (autre affaire, autre dossier). La liste :\n- ${avoidList.slice(0, 40).join("\n- ")}`
+    : "";
+
+  const today = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full" }).format(new Date());
+  const sys = `Tu es un chercheur d'actualité pour une chaîne YouTube. Tu utilises la recherche web pour trouver UN événement d'actualité RÉEL et RÉCENT.
+
+RÈGLES ABSOLUES :
+- L'événement doit relever du thème imposé : ${theme.label}.
+- L'événement doit dater de MOINS DE 7 JOURS (nous sommes le ${today}). Si tu ne trouves rien d'aussi récent, dis-le, n'invente RIEN.
+- INTERDICTION FORMELLE d'inventer, de supposer ou d'extrapoler un fait. Chaque chiffre, chaque décision, chaque événement doit venir DIRECTEMENT d'une source web que tu as consultée. Si un fait n'est pas confirmé par ta recherche, ne l'affirme pas.
+- Vérifie le SENS des décisions (ex : une banque centrale qui "hausse" vs "baisse" ses taux — ne te fie pas à une tendance passée, lis la source réelle).${avoidBlock}
+
+Réponds UNIQUEMENT en JSON, sans texte autour :
+{ "trouve": true/false, "titre_evenement": "l'événement en une phrase factuelle", "faits_verifies": "les faits clés vérifiés (chiffres, décisions, acteurs) tels que trouvés dans les sources", "date_evenement": "AAAA-MM-JJ", "source": "nom du média/source" }
+Si rien de moins de 7 jours qui ne soit PAS dans la liste à éviter : { "trouve": false }.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        // max_tokens ÉLEVÉ : la recherche web consomme beaucoup de tokens (requêtes,
+        // résultats, raisonnement) AVANT le JSON final. Trop bas (1200) → réponse
+        // coupée avant le JSON → faux échec. 4000 laisse la marge pour le JSON.
+        max_tokens: 4000,
+        system: sys,
+        messages: [{ role: "user", content: `Trouve un événement d'actualité réel, du thème "${theme.label}", datant de moins de 7 jours. Cherche sur le web, vérifie, puis réponds en JSON.` }],
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data.error?.message || "Erreur API recherche" };
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    let clean = text.replace(/```json|```/g, "").trim();
+    const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+    if (s !== -1 && e !== -1 && e > s) clean = clean.slice(s, e + 1);
+    let parsed;
+    try { parsed = JSON.parse(clean); } catch { return { error: "réponse recherche non JSON" }; }
+
+    if (!parsed.trouve) return { error: "aucun événement de moins de 7 jours trouvé pour ce thème" };
+
+    // Vérifie la fraîcheur côté code aussi (ceinture + bretelles).
+    if (parsed.date_evenement) {
+      const evDate = new Date(parsed.date_evenement).getTime();
+      const septDays = 8 * 24 * 60 * 60 * 1000; // 8 jours de marge
+      if (!isNaN(evDate) && (Date.now() - evDate) > septDays) {
+        return { error: `événement trop ancien (${parsed.date_evenement})` };
+      }
+    }
+    return {
+      topic: parsed.titre_evenement,
+      faits: parsed.faits_verifies || "",
+      date: parsed.date_evenement || "",
+      source: parsed.source || "",
+    };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// Construit le "learning hint" : lit les analytics récents et en tire des
+// enseignements de FORME (pas de sujet), pour cibler de mieux en mieux SANS se
+// répéter. On apprend les QUALITÉS des vidéos gagnantes, jamais leur sujet.
+export async function buildLearningHint(base) {
+  try {
+    const r = await fetch(`${base}/api/youtube-analytics`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startDate: last30DaysISO() }),
+    });
+    const d = await r.json();
+    if (!d.videos || d.videos.length < 4) return null; // pas assez de recul
+
+    const sorted = [...d.videos].sort((a, b) => b.views - a.views);
+    const top = sorted.slice(0, 5).map(v => v.title);
+    const flop = sorted.slice(-5).map(v => v.title);
+
+    return `APPRENTISSAGE (données réelles de la chaîne — guide de FORME, PAS de sujet) :
+- Ces vidéos ont le MIEUX marché récemment : ${top.map(t => `"${t}"`).join(", ")}. Analyse ce qui les rend fortes (type d'enjeu, angle, formulation) et reproduis ces QUALITÉS — mais sur un sujet NOUVEAU et DIFFÉRENT.
+- Ces vidéos ont le MOINS marché : ${flop.map(t => `"${t}"`).join(", ")}. Évite ces registres/angles.
+- INTERDICTION ABSOLUE de refaire un sujet proche de ceux déjà listés (dans "sujets déjà traités"). Cible la même EXIGENCE de qualité, jamais le même sujet. Varie les régions, les acteurs, les angles.`;
+  } catch {
+    return null; // si l'analytics échoue, on continue sans (non bloquant)
+  }
+}
+
+function last30DaysISO() {
+  const d = new Date(); d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
+// Orchestre un créneau autonome complet : thème imposé + apprentissage, puis
+// script → production. `slot` = {hour,min}, `themeKey` ∈ THEMES.
+// publishAtIso = date de publication planifiée (le créneau du jour).
+export async function runAutonomousSlot(slot, themeKey, base, publishAtIso) {
+  const theme = THEMES[themeKey] || THEMES.geopolitique;
+
+  // ÉTAPE ANTI-INVENTION : on cherche d'abord un vrai événement récent (<7j) sur
+  // le web, pour ancrer le script dans des faits vérifiés. MAIS cette recherche
+  // ne doit JAMAIS bloquer toute la production : si elle échoue, on se rabat sur
+  // une génération thématique avec de FORTES consignes anti-invention, plutôt que
+  // de ne produire aucune vidéo (ce qui arrivait avant ce correctif).
+  const avoid = await getAvoidTopics();
+  const fresh = await findFreshTopic(themeKey, avoid);
+
+  let factsHint, topicForGen, sourceEvent, sourceDate;
+  if (!fresh.error && fresh.topic) {
+    // Cas idéal : sujet réel vérifié. On impose les faits trouvés.
+    console.log(`[autoSlot] sujet vérifié (${fresh.date}, ${fresh.source}) : ${fresh.topic}`);
+    topicForGen = fresh.topic;
+    sourceEvent = fresh.topic;
+    sourceDate = fresh.date;
+    // RÉSERVE le sujet TOUT DE SUITE (avant la production) → les créneaux du même
+    // thème produits plus tard dans la matinée l'éviteront (anti-doublon même-jour).
+    await recordClaimedTopic(fresh.topic);
+    factsHint = `SUJET IMPOSÉ (événement réel vérifié par recherche web, daté du ${fresh.date}, source : ${fresh.source}) : ${fresh.topic}
+FAITS VÉRIFIÉS À RESPECTER SCRUPULEUSEMENT (n'en invente aucun autre, ne modifie aucun chiffre, ne change pas le SENS d'une décision) : ${fresh.faits}
+INTERDICTION ABSOLUE d'ajouter un chiffre, une date ou un fait qui ne figure pas ci-dessus. Si tu as besoin d'un détail non fourni, reste général plutôt que d'inventer.`;
+  } else {
+    // REPLI : la recherche n'a pas abouti. On produit quand même, mais on
+    // verrouille le modèle contre l'invention de faits précis non vérifiés.
+    console.log(`[autoSlot] REPLI thématique pour ${themeKey} (recherche: ${fresh.error || "sans sujet"})`);
+    topicForGen = undefined; // le modèle choisit un sujet dans le thème
+    sourceEvent = null; sourceDate = null;
+    factsHint = `GARDE-FOU FACTUEL STRICT (aucun sujet d'actualité n'a pu être vérifié par recherche web pour cette vidéo) :
+- Traite un enjeu DURABLE et BIEN ÉTABLI du thème, pas un événement daté précis.
+- N'invente AUCUN chiffre précis, AUCune date récente, AUCUNE décision ou déclaration que tu ne peux pas garantir comme exacte et toujours d'actualité.
+- Ne prétends JAMAIS qu'un événement vient de se produire ("vient de", "aujourd'hui", "cette semaine") si tu n'en es pas certain.
+- Préfère les mécanismes de fond, les tendances longues et les faits structurels, formulés prudemment. En cas de doute sur un fait, ne l'affirme pas.`;
+  }
+
+  // IDÉES 1+5+2 : choisir un angle + registre non répétés (mémoire 14j).
+  const memoKey = sourceEvent || theme.label;
+  const { angle, register } = await pickAngleAndRegister(memoKey);
+  const editorialHint = buildEditorialHint(angle, register);
+  console.log(`[autoSlot] angle=${angle} registre=${register}`);
+
+  const learningHint = await buildLearningHint(base);
+  const s = await runScriptStep(slot, {
+    topic: topicForGen,
+    newsTheme: topicForGen,
+    themeHint: theme.instruction + "\n\n" + factsHint,
+    learningHint: learningHint || undefined,
+    editorialHint, angle, register,
+    ...(publishAtIso !== undefined ? { publishAt: publishAtIso } : {}),
+  });
+  if (!s.ok) return { step: "script", ...s };
+  await recordEditorialChoice(memoKey, angle, register); // mémorise après succès
+  const p = await runProductionStep(s.jobId, base);
+  return { step: "production", script: s, production: p, theme: theme.label, angle, register, sourceEvent, sourceDate, grounded: !!sourceEvent };
+}
+
+// PLAN QUOTIDIEN : quel thème et quel créneau pour chaque vidéo du jour.
+// 4 vidéos/jour (2 géo + société + éco). Créneaux sur les fenêtres fortes des
+// Shorts (midi → soirée ; matin évité). Les 2 créneaux géo sont décalés à la
+// production (rang) + réservation de sujet → pas de doublon le même jour.
+export const DAILY_PLAN = [
+  { id: "geo-midi",  key: "geopolitique", slot: { hour: 12, min: 0 } },
+  { id: "societe",   key: "societe",      slot: { hour: 14, min: 0 } },
+  { id: "economie",  key: "economie",     slot: { hour: 17, min: 30 } },
+  { id: "geo-soir",  key: "geopolitique", slot: { hour: 20, min: 0 } },
+];
+
+// Produit UNE SEULE vidéo (un thème). Utilisé par l'Option 2 : une background
+// function par vidéo, chacune avec ses 15 min. Trace chaque étape via console.log
+// (visible dans les logs Netlify de la fonction).
+export async function runOneVideo(themeKey, base, slotOverride, rank = 0) {
+  const entry = DAILY_PLAN.find(p => p.key === themeKey) || DAILY_PLAN[0];
+  const slot = slotOverride && slotOverride.hour != null ? slotOverride : entry.slot;
+  const { iso } = computeSlotToday(slot.hour, slot.min);
+  const slotLabel = `${slot.hour}:${String(slot.min).padStart(2, "0")}`;
+  // ANTI-DOUBLON : si plusieurs créneaux partagent le même thème (ex. 2 géo),
+  // le 2e (rank=1) attend que le 1er ait choisi ET réservé son sujet, pour piocher
+  // un événement DIFFÉRENT. findFreshTopic dure ~30-60 s, on attend donc 120 s/rang.
+  if (rank > 0) {
+    const waitMs = rank * 120000;
+    console.log(`[runOneVideo] thème=${themeKey} rang=${rank} → attente ${waitMs / 1000}s (anti-doublon même-jour)`);
+    await new Promise(r => setTimeout(r, waitMs));
+  }
+  console.log(`[runOneVideo] DÉBUT thème=${themeKey} créneau=${slotLabel} publishAt=${iso}`);
+  try {
+    const r = await runAutonomousSlot(slot, themeKey, base, iso);
+    if (r.production?.ok) {
+      console.log(`[runOneVideo] OK thème=${themeKey} → rendering, renderId=${r.production.renderId}`);
+    } else {
+      console.log(`[runOneVideo] ÉCHEC production thème=${themeKey} → ${r.production?.error || r.error || "inconnu"}`);
+    }
+    return { theme: themeKey, slot: slotLabel, ...r };
+  } catch (e) {
+    console.log(`[runOneVideo] EXCEPTION thème=${themeKey} → ${e.message}`);
+    return { theme: themeKey, slot: slotLabel, error: e.message };
+  }
+}
+
+// PRODUCTION GROUPÉE : les 3 vidéos du jour (géo 8h30, société 12h30, éco 19h30),
+// chacune planifiée pour SON créneau AUJOURD'HUI. Lancée tôt le matin (~5h) par
+// le cron, pour que tout soit prêt à valider avant 7h.
+export async function runDailyBatch(base) {
+  const plan = [
+    { slot: { hour: 8, min: 30 }, theme: "geopolitique" },
+    { slot: { hour: 12, min: 30 }, theme: "societe" },
+    { slot: { hour: 19, min: 30 }, theme: "economie" },
+  ];
+  const results = [];
+  for (const p of plan) {
+    const { iso } = computeSlotToday(p.slot.hour, p.slot.min);
+    try {
+      const r = await runAutonomousSlot(p.slot, p.theme, base, iso);
+      results.push({ theme: p.theme, slot: `${p.slot.hour}:${String(p.slot.min).padStart(2, "0")}`, ...r });
+    } catch (e) {
+      results.push({ theme: p.theme, error: e.message });
+    }
+  }
+  return { ok: true, produced: results.length, results };
+}
+
+
+// ─── GARDE ANTI-DOUBLON quotidien ────────────────────────────────────────────
+// Permet à un cron de tourner large (fenêtre horaire ample) tout en n'exécutant
+// sa tâche qu'UNE fois par jour. Évite le double filtre fragile (fenêtre UTC +
+// tolérance Paris) qui ratait les créneaux. On mémorise la date Paris du dernier
+// run réussi par tâche ; si c'est déjà aujourd'hui, on skip.
+
+function parisDateKey() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+// Renvoie true si la tâche `taskId` a DÉJÀ tourné aujourd'hui (heure de Paris).
+export async function alreadyRanToday(taskId) {
+  try {
+    const store = openStore("jarvis-cron-guard");
+    const last = await store.get(taskId);
+    return last === parisDateKey();
+  } catch { return false; }
+}
+
+// Marque la tâche `taskId` comme ayant tourné aujourd'hui.
+export async function markRanToday(taskId) {
+  try {
+    const store = openStore("jarvis-cron-guard");
+    await store.set(taskId, parisDateKey());
+  } catch { /* best effort */ }
+}
+
+// Heure de Paris courante en minutes depuis minuit (pour les fenêtres larges).
+export function parisMinutes() {
+  const { h, m } = parisNow();
+  return h * 60 + m;
+}
