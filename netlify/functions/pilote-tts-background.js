@@ -97,7 +97,8 @@ export default async (req) => {
       }
       const d = await r.json();
       const buf = Buffer.from(d.audio_base64, "base64");
-      const key = `pilote-nvidia-${seg.id}.mp3`;
+      const prefix = String(body.prefix || "pilote-nvidia").replace(/[^a-z0-9-]/gi, "").slice(0, 60) || "pilote-nvidia";
+      const key = `${prefix}-${seg.id}.mp3`;
       await audioStore.set(key, buf, { metadata: { contentType: "audio/mpeg", createdAt: new Date().toISOString() } });
       const url = `${proto}://${host}/api/serve-audio?key=${encodeURIComponent(key)}`;
       const al = d.alignment || d.normalized_alignment || {};

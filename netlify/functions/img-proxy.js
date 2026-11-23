@@ -9,7 +9,7 @@ const UA = "ActuCrue/1.0 (https://commons.wikimedia.org/wiki/User:Actu_Crue)";
 
 export default async (req) => {
   const u = new URL(req.url).searchParams.get("u");
-  if (!u || !/^https:\/\/((?:upload|thumb)\.wikimedia\.org|live\.staticflickr\.com|farm\d+\.staticflickr\.com|c\d*\.staticflickr\.com)\//.test(u)) {
+  if (!u || !/^https:\/\/((?:upload|thumb)\.wikimedia\.org|live\.staticflickr\.com|farm\d+\.staticflickr\.com|c\d*\.staticflickr\.com|images\.pexels\.com)\//.test(u)) {
     return new Response(JSON.stringify({ error: "url invalide (upload.wikimedia.org requis)" }), {
       status: 400, headers: { "Content-Type": "application/json" },
     });

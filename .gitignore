@@ -1,3 +1,6 @@
 node_modules
 dist
 .netlify
+
+# Studio : images sources téléchargées pour une production (non versionnées)
+studio/productions/*/imgs/

@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(120% 120% at 50% 0%,#1a1d24,#0b0d11 75%);font-family:Arial,'Liberation Sans',sans-serif}
+#kick{position:absolute;left:140px;top:200px;color:#99a2b1;font-weight:800;font-size:46px;letter-spacing:6px}
+#big{position:absolute;left:140px;top:265px;color:#f5a524;font-weight:900;font-size:230px;line-height:1;letter-spacing:-4px;text-shadow:0 0 40px rgba(245,165,36,.35)}
+#sub{position:absolute;left:150px;top:510px;color:#edeef0;font-weight:700;font-size:52px;opacity:0}
+#note{position:absolute;right:130px;top:150px;color:#6b7380;font-size:30px;letter-spacing:2px}
+svg{position:absolute;left:0;top:0}
+.ax{stroke:rgba(237,238,240,.18);stroke-width:3}
+#ln{fill:none;stroke:#f5a524;stroke-width:10;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 12px rgba(245,165,36,.8))}
+#ar{fill:url(#gr)}
+.tl{fill:#99a2b1;font-size:34px;font-weight:700}
+</style></head><body>
+<div id="kick">ACTION NVIDIA · EN UNE SÉANCE</div><div id="big">0 %</div><div id="sub">≈ −4 % à la clôture</div>
+<svg width="1920" height="1080"><defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(245,165,36,.28)"/><stop offset="1" stop-color="rgba(245,165,36,0)"/></linearGradient></defs>
+<line class="ax" x1="1080" y1="230" x2="1780" y2="230"/><text class="tl" x="1790" y="242">0 %</text>
+<line class="ax" x1="1080" y1="230" x2="1080" y2="760"/>
+<path id="ar"/><path id="ln"/><circle id="pt" r="16" fill="#f5a524"/>
+<text class="tl" x="1080" y="800">ouverture</text><text class="tl" x="1640" y="800">clôture</text></svg>
+<div id="note">schéma illustratif</div>
+<script>
+// tracé : 0 % → −13 % (creux) → ≈ −4 %
+var X0=1080,X1=1780,Y0=230,K=38; // 40 px par point de %
+var key=[[0,0],[.08,-2],[.18,-5],[.3,-9],[.42,-13],[.5,-11.5],[.62,-8],[.75,-6],[.88,-4.6],[1,-4]];
+function val(u){for(var i=1;i<key.length;i++)if(u<=key[i][0]){var a=key[i-1],b=key[i],f=(u-a[0])/(b[0]-a[0]);f=f*f*(3-2*f);return a[1]+(b[1]-a[1])*f}return -4}
+var e=function(t){return Math.max(0,Math.min(1,t))};
+window.render=function(t){
+ // 0.2→2.4 s : descente jusqu'au creux ; 2.4→4.4 : remontée
+ var u=t<0.2?0:t<2.4?(t-0.2)/2.2*0.42:0.42+e((t-2.4)/2.0)*0.58;
+ var N=60,d='',a='';for(var i=0;i<=N;i++){var uu=u*i/N,x=X0+(X1-X0)*uu,y=Y0-K*val(uu);d+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)}
+ var xe=X0+(X1-X0)*u,ye=Y0-K*val(u);
+ document.getElementById('ln').setAttribute('d',d);document.getElementById('ar').setAttribute('d',d+'L'+xe+' '+Y0+'L'+X0+' '+Y0+'Z');
+ var p=document.getElementById('pt');p.setAttribute('cx',xe);p.setAttribute('cy',ye);
+ var v=val(u);document.getElementById('big').textContent=(v<-0.05?'−':'')+Math.abs(t<2.4?v:Math.min(13,-val(0.42))).toFixed(0)+' %';
+ if(t>=2.4)document.getElementById('big').textContent='−13 %';
+ document.getElementById('sub').style.opacity=e((t-3.6)/0.5);
+ document.body.style.opacity=e(t/0.25);
+};
+window.render(0);window.__ready=true;
+</script></body></html>

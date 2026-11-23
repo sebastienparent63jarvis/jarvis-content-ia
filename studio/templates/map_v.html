@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:radial-gradient(120% 120% at 50% 18%,#122034,#070b14 70%)}
+svg{position:absolute;left:0;top:0;width:1080px;height:1920px}
+.land{fill:rgba(90,135,185,.12);stroke:rgba(120,170,220,.3);vector-effect:non-scaling-stroke;stroke-width:1.2}
+.land.hot{fill:rgba(245,165,36,.22);stroke:#f5a524;stroke-width:2}
+#pin{position:absolute;left:540px;top:760px}
+</style></head><body><svg id="m" preserveAspectRatio="xMidYMid slice"><g id="g"></g></svg>
+<div id="pin" style="opacity:0"><div style="position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;background:#f5a524;box-shadow:0 0 20px 7px rgba(245,165,36,.9)"></div><div id="r" style="position:absolute;border:4px solid #f5a524;border-radius:50%"></div></div>
+<script src="maps_data2.js"></script><script>
+var S=JSON.parse(decodeURIComponent(location.hash.slice(1)));var NS='http://www.w3.org/2000/svg',g=document.getElementById('g');
+MAPDATA.paths.forEach(function(p){var e=document.createElementNS(NS,'path');e.setAttribute('d',p.d);e.setAttribute('class','land'+((S.hot||[]).indexOf(p.n)>=0?' hot':''));g.appendChild(e)});
+var tx=(S.lon+180)/360*1000,ty=(90-S.lat)/180*500,Z=S.z,ease=function(t){t=Math.max(0,Math.min(1,t));return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2};
+var W0=420,H0=W0*16/9;
+window.render=function(t){var p=ease(t/1.8),w=W0/Math.pow(Z,p),h=H0/Math.pow(Z,p);
+ // la cible se trouve à y=760/1920 de l'écran
+ var cy=ty+h*(0.5-760/1920);document.getElementById('m').setAttribute('viewBox',(tx-w/2)+' '+(cy-h/2)+' '+w+' '+h);
+ document.getElementById('pin').style.opacity=Math.max(0,Math.min(1,(t-1.6)/.3));var rp=((t-1.6)%1.4)/1.4,rr=16+rp*110,r=document.getElementById('r');r.style.width=r.style.height=2*rr+'px';r.style.left=r.style.top=-rr+'px';r.style.opacity=t>1.6?1-rp:0;};
+window.render(0);window.__ready=true;</script></body></html>
