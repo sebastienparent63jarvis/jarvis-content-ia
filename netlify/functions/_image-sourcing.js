@@ -215,3 +215,6 @@ export async function sourceImages(req) {
     candidates: list,
   };
 }
+
+// Additif (modèle Actu Crue shorts) : accès aux métadonnées de fichiers Commons.
+export async function commonsFileInfo(titles) { return commonsInfo(titles); }

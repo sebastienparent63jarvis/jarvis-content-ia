@@ -6,6 +6,7 @@
 
 import { getStore } from "@netlify/blobs";
 import { SHORTS_SYSTEM_PROMPT, buildUserPrompt, extractScript } from "./_script-core.js";
+import { getShortsModel, runProductionStepAC } from "./_ac-short.js";
 
 // Heure de Paris courante (gère UTC+1/UTC+2 automatiquement via Intl).
 export function parisNow() {
@@ -146,6 +147,13 @@ export async function runScriptStep(slot, opts = {}) {
 // étant asynchrone, on stocke le render_id ; le Temps B récupérera la vidéo finie.
 // `base` = origine du site (ex https://xxx.netlify.app), pour les appels internes.
 export async function runProductionStep(jobId, base) {
+  // MODÈLE ACTU CRUE (shorts) : activé par le drapeau jarvis-config/shorts-model.
+  // Si la production « modèle Actu Crue » échoue, on retombe sur l'ancien montage
+  // ci-dessous : le créneau n'est jamais perdu.
+  if ((await getShortsModel()) === "actucrue") {
+    try { return await runProductionStepAC(jobId, base); }
+    catch (e) { console.log(`[runProductionStep] modèle Actu Crue en échec (${e.message}) → repli ancien montage`); }
+  }
   const jobStore = openStore("jarvis-auto-jobs");
   const job = await jobStore.get(jobId, { type: "json" });
   if (!job) return { error: "job introuvable" };
