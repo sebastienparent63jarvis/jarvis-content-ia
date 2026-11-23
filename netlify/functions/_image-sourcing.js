@@ -53,8 +53,7 @@ function titleAllowed(title, kind) {
 // ---------- 1. Wikidata : résolution d'entités ----------
 // entity: {name, type:'person'|'org'|'place'|'thing', context?:[mots]}
 export async function resolveEntity(ent, globalContext = []) {
-  const ctx = [...(ent.context || []), ...globalContext].map(norm).filter(Boolean);
-  const found = [];
+    const found = [];
   for (const lang of ["fr", "en"]) {
     const j = await getJSON(WD + "?" + qs({ action: "wbsearchentities", search: ent.name, language: lang, uselang: lang, type: "item", limit: 7, format: "json" }));
     for (const s of (j?.search || [])) if (!found.find((f) => f.id === s.id)) found.push({ id: s.id, label: s.label, desc: s.description || "" });
@@ -63,18 +62,20 @@ export async function resolveEntity(ent, globalContext = []) {
   const ids = found.map((f) => f.id).join("|");
   const ej = await getJSON(WD + "?" + qs({ action: "wbgetentities", ids, props: "claims|descriptions|labels", languages: "fr|en", format: "json" }));
   const P = (e, p) => (e?.claims?.[p] || []).map((c) => c.mainsnak?.datavalue?.value).filter(Boolean);
-  let best = null, bestScore = -1;
+  let best = null, bestScore = -1e9;
+  // contexte d'identité : celui de l'entité s'il est fourni (plus strict), sinon le global
+  const idCtx = (ent.context && ent.context.length ? ent.context : globalContext).map(norm).filter(Boolean);
   for (const f of found) {
     const e = ej?.entities?.[f.id]; if (!e) continue;
     const isHuman = P(e, "P31").some((v) => v.id === "Q5");
     if (ent.type === "person" && !isHuman) continue;
+    if (ent.type !== "person" && isHuman) continue;
     const desc = norm([e.descriptions?.fr?.value, e.descriptions?.en?.value].join(" "));
     const label = norm(e.labels?.fr?.value || e.labels?.en?.value || f.label);
-    let score = 0;
-    if (label === norm(ent.name)) score += 3;
-    const ctxHit = ctx.filter((c) => desc.includes(c)).length;
-    score += ctxHit * 4;
-    if (P(e, "P18").length) score += 1;
+    const nClaims = Object.values(e.claims || {}).reduce((n, a) => n + a.length, 0);
+    const ctxHit = idCtx.filter((c) => desc.includes(c)).length;
+    let score = (label === norm(ent.name) ? 5 : 0) + Math.log10(nClaims + 1) * 3;
+    if (ent.type === "person") score += ctxHit * 6;
     if (score > bestScore) { bestScore = score; best = { e, f, ctxHit, desc }; }
   }
   if (!best) return { ...ent, verified: false, reason: "aucune entité du bon type" };
