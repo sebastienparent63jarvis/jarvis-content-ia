@@ -9,13 +9,14 @@ const UA = "ActuCrue/1.0 (https://commons.wikimedia.org/wiki/User:Actu_Crue)";
 
 export default async (req) => {
   const u = new URL(req.url).searchParams.get("u");
-  if (!u || !/^https:\/\/(upload\.wikimedia\.org|live\.staticflickr\.com|farm\d+\.staticflickr\.com|c\d*\.staticflickr\.com)\//.test(u)) {
+  if (!u || !/^https:\/\/((?:upload|thumb)\.wikimedia\.org|live\.staticflickr\.com|farm\d+\.staticflickr\.com|c\d*\.staticflickr\.com)\//.test(u)) {
     return new Response(JSON.stringify({ error: "url invalide (upload.wikimedia.org requis)" }), {
       status: 400, headers: { "Content-Type": "application/json" },
     });
   }
   try {
-    const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "image/*,*/*", ...(/wikimedia/.test(u) ? { "Referer": "https://commons.wikimedia.org/" } : {}) } });
+    const src = u.replace("https://thumb.wikimedia.org/", "https://upload.wikimedia.org/");
+    const r = await fetch(src, { headers: { "User-Agent": UA, "Accept": "image/*,*/*", ...(/wikimedia/.test(u) ? { "Referer": "https://commons.wikimedia.org/" } : {}) } });
     if (!r.ok) {
       return new Response(JSON.stringify({ error: "wikimedia " + r.status }), { status: r.status, headers: { "Content-Type": "application/json" } });
     }

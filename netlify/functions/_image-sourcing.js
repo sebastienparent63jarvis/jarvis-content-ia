@@ -108,7 +108,7 @@ async function commonsInfo(titles) {
       const m = ii.extmetadata || {};
       out.push({
         title: p.title, w: ii.width, h: ii.height, sha1: ii.sha1, mime: ii.mime,
-        url: ii.thumburl || ii.url, full: ii.url, landing: ii.descriptionurl,
+        url: (ii.thumburl || ii.url).replace("https://thumb.wikimedia.org/", "https://upload.wikimedia.org/").replace(/[?&]utm_[^#]*$/, ""), full: ii.url, landing: ii.descriptionurl,
         license: strip(m.LicenseShortName?.value), author: strip(m.Artist?.value).slice(0, 80),
         date: strip(m.DateTimeOriginal?.value || m.DateTime?.value).slice(0, 10),
         desc: strip(m.ImageDescription?.value).slice(0, 200),
