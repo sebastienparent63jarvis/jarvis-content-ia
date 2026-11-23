@@ -3,19 +3,19 @@
 // chercher l'image avec un User-Agent conforme (compte Actu Crue) et la ressert
 // depuis le domaine du site, que Shotstack sait télécharger.
 //   GET /api/img?u=<url upload.wikimedia.org encodée>
-// Restreint à upload.wikimedia.org (pas de proxy ouvert).
+// Restreint aux hôtes d'images libres connus (Commons, Flickr via Openverse) — pas de proxy ouvert.
 
 const UA = "ActuCrue/1.0 (https://commons.wikimedia.org/wiki/User:Actu_Crue)";
 
 export default async (req) => {
   const u = new URL(req.url).searchParams.get("u");
-  if (!u || !/^https:\/\/upload\.wikimedia\.org\//.test(u)) {
+  if (!u || !/^https:\/\/(upload\.wikimedia\.org|live\.staticflickr\.com|farm\d+\.staticflickr\.com|c\d*\.staticflickr\.com)\//.test(u)) {
     return new Response(JSON.stringify({ error: "url invalide (upload.wikimedia.org requis)" }), {
       status: 400, headers: { "Content-Type": "application/json" },
     });
   }
   try {
-    const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "image/*,*/*", "Referer": "https://commons.wikimedia.org/" } });
+    const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "image/*,*/*", ...(/wikimedia/.test(u) ? { "Referer": "https://commons.wikimedia.org/" } : {}) } });
     if (!r.ok) {
       return new Response(JSON.stringify({ error: "wikimedia " + r.status }), { status: r.status, headers: { "Content-Type": "application/json" } });
     }
