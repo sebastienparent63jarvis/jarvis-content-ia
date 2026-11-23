@@ -81,7 +81,9 @@ export default async (req) => {
     // On garantit la présence de #Shorts dans la description (fiabilise le
     // classement en Short pour les uploads via l'API YouTube).
     const baseDesc = item.description || "";
-    const descWithTag = /#shorts/i.test(baseDesc) ? baseDesc : (baseDesc ? baseDesc + "\n\n#Shorts" : "#Shorts");
+    // Format long (pilote ou /api/render-long) : jamais de #Shorts.
+    const isLong = ["pilote", "long"].includes(item.slot) || item.format === "long";
+    const descWithTag = isLong || /#shorts/i.test(baseDesc) ? baseDesc : (baseDesc ? baseDesc + "\n\n#Shorts" : "#Shorts");
     const metadata = {
       snippet: { title: (item.title || "Actu Crue").slice(0, 100), description: descWithTag, categoryId: "25" },
       status: { privacyStatus: "private", selfDeclaredMadeForKids: false, ...(publishAtIso ? { publishAt: publishAtIso } : {}) },

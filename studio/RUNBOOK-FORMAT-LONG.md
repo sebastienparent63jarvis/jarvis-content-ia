@@ -1,8 +1,8 @@
 # RUNBOOK — Produire un format long Actu Crue (modèle validé le 23/11/2026)
 
 Ce document est la procédure complète qu'une session Claude programmée suit pour produire
-une vidéo longue (~8 min 20 s, > 8 min pour les mid-rolls) **quelques heures avant sa
-publication**, à partir de l'actualité fraîche. Référence visuelle : pilote Nvidia v9.
+une vidéo longue (~8 min 20 s, > 8 min pour les mid-rolls) **le matin même de sa
+publication (lancement 05:41)**, à partir de l'actualité fraîche. Référence visuelle : pilote Nvidia v9.
 Règles détaillées : doc projet `claude/regles-or-visuels-pipeline.md` et
 `claude/modele-production-actu-crue.md` (à relire en début de session avec l'outil Projects).
 
@@ -21,15 +21,25 @@ Règles détaillées : doc projet `claude/regles-or-visuels-pipeline.md` et
    que l'angle tient toujours. Si un fait majeur est tombé dans les dernières heures, l'intégrer.
    Si le sujet est dépassé, choisir le sujet le plus fort de la semaine dans le même thème et le noter.
 3. Toujours : faits datés et sourcés ; allégations présentées comme telles ; pas d'opinion partisane.
-4. Conflit d'intérêts : si le sujet concerne Anthropic (l'entreprise qui développe Claude), le dire
-   à Sébastien dans le compte rendu et rester strictement factuel, sources externes uniquement.
+4. Si `planning-long.md` indique « PAS DE PRODUCTION » à la date du jour : ne rien produire,
+   envoyer une ligne à Sébastien (SendUserMessage) et s'arrêter.
 
 ## 2. Script (≈ 20 min)
 - ~1 150 à 1 250 mots → ~470 s de voix. Français, phrases orales courtes, chiffres écrits en lettres
   dans le texte lu (la voix lit mal « 13 % »).
 - 22 à 28 segments, ids `01`…`NN`, 2 à 4 phrases chacun. 5 chapitres (dont « Et maintenant ? »).
-- Structure : accroche choc (10 s) → promesse → faits datés → enjeux → ce qui peut se passer → question
-  au spectateur + appel à l'abonnement (dernier segment).
+- Structure : accroche choc (10 s) → promesse → faits datés → **retour en arrière** → enjeux → ce qui peut
+  se passer → question au spectateur + appel à l'abonnement (dernier segment).
+- **Retour en arrière obligatoire (formats longs uniquement)** — un chapitre qui donne au spectateur ce qu'il faut
+  savoir pour comprendre l'actualité. Le choisir selon la nature du sujet :
+  - **Entreprise ou entrepreneur** (Tesla, Nvidia, Anthropic, OpenAI…) → l'histoire de la personne et/ou de
+    l'entreprise : fondation, moments clés, virages, ce qui l'a rendue incontournable.
+    Ex. un sujet Tesla commence par refaire l'histoire d'Elon Musk.
+  - **Dirigeant politique ou État** (Poutine, Xi, Trump en tant que président…) → PAS une biographie : le contexte
+    macro-géopolitique et les enjeux majeurs du pays (histoire stratégique, intérêts vitaux, contraintes,
+    alliances, rapports de force). Ex. un sujet sur Poutine retrace ce que la Russie veut et craint depuis 1991.
+  - **Crise, conflit, ressource** (Ormuz, Taïwan, énergie) → les racines du conflit et les intérêts des acteurs.
+  Critère : raconter le passé qui EXPLIQUE l'enjeu d'aujourd'hui, pas un récit exhaustif. ~20-25 % du script.
 - Titre ≤ 60 caractères ; description avec chapitres et sources.
 - Fichier : `studio/productions/<slug>/production.json`
   `{title, description, category:"GÉOPOLITIQUE|ÉCONOMIE|TECH|…", chapters:{"03":"LE SÉISME",…}, people:{cle:{name,role}}, publishAt}`.
