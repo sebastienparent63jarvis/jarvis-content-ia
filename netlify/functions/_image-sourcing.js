@@ -51,6 +51,7 @@ function titleAllowed(title, kind) {
 }
 
 // ---------- 1. Wikidata : résolution d'entités ----------
+const CREATIVE = new Set(["Q5398426", "Q11424", "Q7725634", "Q482994", "Q134556", "Q1259759", "Q21191270", "Q7889", "Q14660", "Q186516", "Q4167410"]);
 // entity: {name, type:'person'|'org'|'place'|'thing', context?:[mots]}
 export async function resolveEntity(ent, globalContext = []) {
     const found = [];
@@ -70,6 +71,10 @@ export async function resolveEntity(ent, globalContext = []) {
     const isHuman = P(e, "P31").some((v) => v.id === "Q5");
     if (ent.type === "person" && !isHuman) continue;
     if (ent.type !== "person" && isHuman) continue;
+    // garde-fous de type : une œuvre (série, film, album…) n'est jamais une org ni un lieu
+    if (P(e, "P31").some((v) => CREATIVE.has(v.id))) continue;
+    if (ent.type === "place" && !P(e, "P625").length) continue;               // un lieu a des coordonnées
+    if (ent.type === "org" && !["P856", "P159", "P452", "P749"].some((p) => P(e, p).length)) continue; // une org a site/siège/secteur/maison mère
     const desc = norm([e.descriptions?.fr?.value, e.descriptions?.en?.value].join(" "));
     const label = norm(e.labels?.fr?.value || e.labels?.en?.value || f.label);
     const nClaims = Object.values(e.claims || {}).reduce((n, a) => n + a.length, 0);
