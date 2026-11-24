@@ -8,6 +8,46 @@
 "text": "En une seule séance, l'action a bondi de trente et un pour cent. Près de mille milliards de dollars de valeur en plus, en une journée. Mais derrière ce retour, une question agite Washington : qui a vraiment pris la décision ? On déroule les faits, calmement."
 },
 {
+"id": "h01",
+"text": "Pour comprendre pourquoi ce retour pèse autant, il faut d'abord connaître l'homme. Jensen Huang naît à Taïwan, en mille neuf cent soixante-trois. Enfant, ses parents, qui vivent alors en Thaïlande, l'envoient aux États-Unis avec son frère. Presque sans rien."
+},
+{
+"id": "h02",
+"text": "Il atterrit dans un pensionnat rural du Kentucky, l'Oneida Baptist Institute. Il a neuf ans : c'est le plus jeune élève du campus. Sa corvée : nettoyer les toilettes, pour une centaine d'adolescents."
+},
+{
+"id": "h03",
+"text": "Adolescent, il travaille chez Denny's, une chaîne de restaurants américaine : d'abord à la plonge, puis comme serveur. Il devient ingénieur en électronique, et travaille chez des fabricants de puces, dont LSI Logic. Le monde des semi-conducteurs, il le connaît de l'intérieur."
+},
+{
+"id": "h04",
+"text": "En mille neuf cent quatre-vingt-treize, il a trente ans. Avec deux ingénieurs, Chris Malachowsky et Curtis Priem, il s'attable dans un Denny's de San José, en Californie. C'est là que les trois hommes décident de créer Nvidia. Le fonds d'investissement Sequoia les finance avant même qu'ils aient un produit."
+},
+{
+"id": "h05",
+"text": "Le pari : des puces dédiées à l'image en trois dimensions, pour les jeux vidéo. Mais la première puce, la NV1, sortie en mille neuf cent quatre-vingt-quinze, est un échec technique. Nvidia l'avait conçue avec le fabricant de consoles Sega. Et l'entreprise frôle la faillite."
+},
+{
+"id": "h06",
+"text": "En mille neuf cent quatre-vingt-seize, Nvidia n'a plus qu'un mois de trésorerie. Jensen Huang tente alors un coup audacieux : il demande à Sega, le partenaire qu'il s'apprête à décevoir, d'investir cinq millions de dollars pour maintenir l'entreprise à flot. Et Sega accepte."
+},
+{
+"id": "h07",
+"text": "L'année suivante, Nvidia lance la RIVA cent vingt-huit. Un million d'exemplaires vendus en quatre mois : l'entreprise est sauvée. En mille neuf cent quatre-vingt-dix-neuf, elle entre en Bourse, puis lance la GeForce deux cent cinquante-six, et popularise un mot : le processeur graphique, le GPU."
+},
+{
+"id": "h08",
+"text": "Le vrai virage arrive en deux mille six, avec CUDA : un outil qui permet d'utiliser ses puces pour autre chose que les jeux, du calcul massif, en parallèle. Pendant des années, Wall Street n'y voit pas grand intérêt. Jensen Huang persiste. Or ce calcul en parallèle, c'est précisément ce dont l'intelligence artificielle aura besoin."
+},
+{
+"id": "h09",
+"text": "En deux mille douze, des chercheurs de l'université de Toronto entraînent un réseau de neurones, AlexNet, sur deux cartes graphiques Nvidia. Il surclasse ses concurrents en reconnaissance d'images. En deux mille seize, Jensen Huang livre en personne un supercalculateur DGX à une petite organisation de recherche : OpenAI. Six ans plus tard, ChatGPT sort. Et toute la planète tech veut des puces Nvidia."
+},
+{
+"id": "h10",
+"text": "En juillet deux mille vingt-cinq, Nvidia devient la première entreprise de l'histoire à dépasser quatre mille milliards de dollars en Bourse. Trois mois plus tard, le vingt-neuf octobre, elle franchit les cinq mille milliards. Jensen Huang, blouson de cuir sur toutes les scènes, devient un interlocuteur des chefs d'État, et le principal opposant aux restrictions d'export de puces vers la Chine. C'est cet homme-là que Nvidia vient de rappeler. Et c'est pour ça que son retour est si politique."
+},
+{
 "id": "03",
 "text": "Lundi vingt-trois novembre, Nvidia publie un communiqué, déposé auprès du gendarme boursier américain. Le conseil d'administration a voté, à l'unanimité, la réintégration de Jensen Huang comme président et directeur général. Avec effet immédiat."
 },
@@ -40,32 +80,8 @@
 "text": "Pendant ce temps, une pétition soutenue par Elon Musk et d'autres patrons de la tech dépasse les cent quatre-vingt mille signatures. Selon le Financial Times, un proche de Jensen Huang évoque une cellule de crise de la Silicon Valley pour obtenir son retour. Toujours selon le Financial Times, Jensen Huang avait lui-même discuté d'un retour avec son entourage, quelques jours seulement après son départ."
 },
 {
-"id": "11",
-"text": "Et lundi, le conseil change d'avis. Donald Trump commente : ils ont fait ce que nous voulions qu'ils fassent. Onze jours, du départ au retour. Mais pourquoi un seul homme pèse-t-il autant, au point d'intéresser la Maison Blanche ?"
-},
-{
-"id": "12",
-"text": "Pour le comprendre, il faut remonter à mille neuf cent quatre-vingt-treize. Jensen Huang, né à Taïwan et arrivé enfant aux États-Unis, a trente ans. Avec deux ingénieurs, Chris Malachowsky et Curtis Priem, il fonde Nvidia, autour d'une table d'un restaurant Denny's, en Californie. Il a étudié l'ingénierie électrique dans l'Oregon, puis à Stanford, et travaillé chez des fabricants de puces comme AMD et LSI Logic."
-},
-{
-"id": "13",
-"text": "Le pari de départ : des puces dédiées à l'image en trois dimensions, pour les jeux vidéo. En mille neuf cent quatre-vingt-dix-neuf, Nvidia entre en Bourse, puis lance la GeForce deux cent cinquante-six, et popularise un mot : le processeur graphique, le GPU. Pendant des années, Nvidia reste une marque connue surtout des joueurs."
-},
-{
-"id": "14",
-"text": "Le vrai virage arrive en deux mille six. Nvidia lance CUDA, un outil qui permet d'utiliser ses puces pour autre chose que les jeux : du calcul scientifique, massif, en parallèle. Pendant des années, Wall Street n'y voit pas grand intérêt. Jensen Huang, lui, persiste. Or le calcul massif en parallèle, c'est précisément ce dont l'intelligence artificielle aura besoin."
-},
-{
-"id": "15",
-"text": "En deux mille douze, des chercheurs de l'université de Toronto entraînent un réseau de neurones, AlexNet, sur deux cartes graphiques Nvidia. Il surclasse tous ses concurrents en reconnaissance d'images. L'apprentissage profond décolle, et il tourne sur du matériel Nvidia."
-},
-{
-"id": "16",
-"text": "En deux mille seize, Jensen Huang livre en personne un supercalculateur DGX à une petite organisation de recherche : OpenAI. Six ans plus tard, en novembre deux mille vingt-deux, ChatGPT sort. Et toute la planète tech veut des puces Nvidia."
-},
-{
-"id": "17",
-"text": "En juillet deux mille vingt-cinq, Nvidia devient la première entreprise de l'histoire à dépasser quatre mille milliards de dollars en Bourse. Jensen Huang devient alors bien plus qu'un patron : un interlocuteur des chefs d'État, et le principal opposant aux restrictions d'export de puces vers la Chine. C'est exactement ce qui rend son retour si politique."
+"id": "11b",
+"text": "Et lundi, le conseil change d'avis. Donald Trump commente : ils ont fait ce que nous voulions qu'ils fassent. Onze jours, du départ au retour."
 },
 {
 "id": "18",

@@ -1,10 +1,33 @@
-# Format long — « Jensen Huang revient chez Nvidia : qui a vraiment décidé ? » (slug huang-retour)
+# Format long — « Jensen Huang revient chez Nvidia : qui a vraiment décidé ? » (slug huang-retour, v2)
 
-_Produit le 24/11/2026 au matin, à la demande de Sébastien, après la réintégration de Jensen Huang (23/11). Remplace le pilote « Nvidia sans Jensen Huang : qui dirige l'IA maintenant ? », devenu caduc. Publication prévue mardi 24/11 à 18:00 (Paris). Durée 8 min 19 s, 133 plans (photos 30 %, vidéos 32 %, animations 31 %, cartes 7 %)._
+_v2 du 24/11/2026 : histoire complète de Jensen Huang et de Nvidia placée juste après l'accroche (demande de Sébastien). Durée 9 min 19 s, 151 plans (photos 31 %, vidéos 31 %, animations 32 %, cartes 7 %). Publication prévue mardi 24/11 à 18:00 (Paris)._
 
 **01** — Il y a onze jours, il quittait Nvidia par la petite porte. Ce lundi, il en a repris les commandes. Jensen Huang, le fondateur de l'entreprise qui fait tourner l'intelligence artificielle mondiale, est de nouveau son patron.
 
 **02** — En une seule séance, l'action a bondi de trente et un pour cent. Près de mille milliards de dollars de valeur en plus, en une journée. Mais derrière ce retour, une question agite Washington : qui a vraiment pris la décision ? On déroule les faits, calmement.
+
+
+## L'HOMME DES PUCES
+
+**h01** — Pour comprendre pourquoi ce retour pèse autant, il faut d'abord connaître l'homme. Jensen Huang naît à Taïwan, en mille neuf cent soixante-trois. Enfant, ses parents, qui vivent alors en Thaïlande, l'envoient aux États-Unis avec son frère. Presque sans rien.
+
+**h02** — Il atterrit dans un pensionnat rural du Kentucky, l'Oneida Baptist Institute. Il a neuf ans : c'est le plus jeune élève du campus. Sa corvée : nettoyer les toilettes, pour une centaine d'adolescents.
+
+**h03** — Adolescent, il travaille chez Denny's, une chaîne de restaurants américaine : d'abord à la plonge, puis comme serveur. Il devient ingénieur en électronique, et travaille chez des fabricants de puces, dont LSI Logic. Le monde des semi-conducteurs, il le connaît de l'intérieur.
+
+**h04** — En mille neuf cent quatre-vingt-treize, il a trente ans. Avec deux ingénieurs, Chris Malachowsky et Curtis Priem, il s'attable dans un Denny's de San José, en Californie. C'est là que les trois hommes décident de créer Nvidia. Le fonds d'investissement Sequoia les finance avant même qu'ils aient un produit.
+
+**h05** — Le pari : des puces dédiées à l'image en trois dimensions, pour les jeux vidéo. Mais la première puce, la NV1, sortie en mille neuf cent quatre-vingt-quinze, est un échec technique. Nvidia l'avait conçue avec le fabricant de consoles Sega. Et l'entreprise frôle la faillite.
+
+**h06** — En mille neuf cent quatre-vingt-seize, Nvidia n'a plus qu'un mois de trésorerie. Jensen Huang tente alors un coup audacieux : il demande à Sega, le partenaire qu'il s'apprête à décevoir, d'investir cinq millions de dollars pour maintenir l'entreprise à flot. Et Sega accepte.
+
+**h07** — L'année suivante, Nvidia lance la RIVA cent vingt-huit. Un million d'exemplaires vendus en quatre mois : l'entreprise est sauvée. En mille neuf cent quatre-vingt-dix-neuf, elle entre en Bourse, puis lance la GeForce deux cent cinquante-six, et popularise un mot : le processeur graphique, le GPU.
+
+**h08** — Le vrai virage arrive en deux mille six, avec CUDA : un outil qui permet d'utiliser ses puces pour autre chose que les jeux, du calcul massif, en parallèle. Pendant des années, Wall Street n'y voit pas grand intérêt. Jensen Huang persiste. Or ce calcul en parallèle, c'est précisément ce dont l'intelligence artificielle aura besoin.
+
+**h09** — En deux mille douze, des chercheurs de l'université de Toronto entraînent un réseau de neurones, AlexNet, sur deux cartes graphiques Nvidia. Il surclasse ses concurrents en reconnaissance d'images. En deux mille seize, Jensen Huang livre en personne un supercalculateur DGX à une petite organisation de recherche : OpenAI. Six ans plus tard, ChatGPT sort. Et toute la planète tech veut des puces Nvidia.
+
+**h10** — En juillet deux mille vingt-cinq, Nvidia devient la première entreprise de l'histoire à dépasser quatre mille milliards de dollars en Bourse. Trois mois plus tard, le vingt-neuf octobre, elle franchit les cinq mille milliards. Jensen Huang, blouson de cuir sur toutes les scènes, devient un interlocuteur des chefs d'État, et le principal opposant aux restrictions d'export de puces vers la Chine. C'est cet homme-là que Nvidia vient de rappeler. Et c'est pour ça que son retour est si politique.
 
 
 ## LE REVIREMENT
@@ -28,22 +51,7 @@ _Produit le 24/11/2026 au matin, à la demande de Sébastien, après la réinté
 
 **10** — Pendant ce temps, une pétition soutenue par Elon Musk et d'autres patrons de la tech dépasse les cent quatre-vingt mille signatures. Selon le Financial Times, un proche de Jensen Huang évoque une cellule de crise de la Silicon Valley pour obtenir son retour. Toujours selon le Financial Times, Jensen Huang avait lui-même discuté d'un retour avec son entourage, quelques jours seulement après son départ.
 
-**11** — Et lundi, le conseil change d'avis. Donald Trump commente : ils ont fait ce que nous voulions qu'ils fassent. Onze jours, du départ au retour. Mais pourquoi un seul homme pèse-t-il autant, au point d'intéresser la Maison Blanche ?
-
-
-## L'HOMME DES PUCES
-
-**12** — Pour le comprendre, il faut remonter à mille neuf cent quatre-vingt-treize. Jensen Huang, né à Taïwan et arrivé enfant aux États-Unis, a trente ans. Avec deux ingénieurs, Chris Malachowsky et Curtis Priem, il fonde Nvidia, autour d'une table d'un restaurant Denny's, en Californie. Il a étudié l'ingénierie électrique dans l'Oregon, puis à Stanford, et travaillé chez des fabricants de puces comme AMD et LSI Logic.
-
-**13** — Le pari de départ : des puces dédiées à l'image en trois dimensions, pour les jeux vidéo. En mille neuf cent quatre-vingt-dix-neuf, Nvidia entre en Bourse, puis lance la GeForce deux cent cinquante-six, et popularise un mot : le processeur graphique, le GPU. Pendant des années, Nvidia reste une marque connue surtout des joueurs.
-
-**14** — Le vrai virage arrive en deux mille six. Nvidia lance CUDA, un outil qui permet d'utiliser ses puces pour autre chose que les jeux : du calcul scientifique, massif, en parallèle. Pendant des années, Wall Street n'y voit pas grand intérêt. Jensen Huang, lui, persiste. Or le calcul massif en parallèle, c'est précisément ce dont l'intelligence artificielle aura besoin.
-
-**15** — En deux mille douze, des chercheurs de l'université de Toronto entraînent un réseau de neurones, AlexNet, sur deux cartes graphiques Nvidia. Il surclasse tous ses concurrents en reconnaissance d'images. L'apprentissage profond décolle, et il tourne sur du matériel Nvidia.
-
-**16** — En deux mille seize, Jensen Huang livre en personne un supercalculateur DGX à une petite organisation de recherche : OpenAI. Six ans plus tard, en novembre deux mille vingt-deux, ChatGPT sort. Et toute la planète tech veut des puces Nvidia.
-
-**17** — En juillet deux mille vingt-cinq, Nvidia devient la première entreprise de l'histoire à dépasser quatre mille milliards de dollars en Bourse. Jensen Huang devient alors bien plus qu'un patron : un interlocuteur des chefs d'État, et le principal opposant aux restrictions d'export de puces vers la Chine. C'est exactement ce qui rend son retour si politique.
+**11b** — Et lundi, le conseil change d'avis. Donald Trump commente : ils ont fait ce que nous voulions qu'ils fassent. Onze jours, du départ au retour.
 
 
 ## LA FACTURE POLITIQUE
@@ -74,11 +82,11 @@ Onze jours après sa démission, Jensen Huang reprend la tête de Nvidia. Le con
 
 Chapitres
 00:00 Introduction
-00:30 Le revirement
-01:36 Onze jours
-03:09 L'homme des puces
-05:12 La facture politique
-07:10 Et maintenant ?
+00:30 L'homme des puces : de Taïwan au Denny's
+03:38 Le revirement
+04:44 Onze jours
+06:12 La facture politique
+08:10 Et maintenant ?
 
 Les soupçons évoqués (Megaspeed, renseignement) sont des allégations rapportées par la presse et des enquêtes en cours, pas des verdicts. Megaspeed et Pékin ont démenti.
 
@@ -91,6 +99,7 @@ Sources
 - Euronews, 16 et 17/11/2026 (déclarations de Donald Trump, position du conseil, pétition)
 - Financial Times (campagne pour le retour, via Euronews)
 - Al Jazeera, 23/11/2026
+- Histoire : Fortune (05/12/2025), Inc. (13/12/2024), CNBC (04/05/2024), AP (29/10/2025)
 
 Photos : Wikimedia Commons / Flickr (licences CC et domaine public, auteurs crédités en fin de vidéo). Vidéos : Pexels.
 
