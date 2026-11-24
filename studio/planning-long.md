@@ -18,8 +18,11 @@ l'entreprise pour un sujet économique/tech ; contexte macro-géopolitique et en
 dirigeant politique ou un État.
 
 ## Semaine du 23 novembre 2026
-### Mardi 24/11 — 18:00 — PAS DE PRODUCTION
-Publication du pilote « Nvidia sans Jensen Huang : qui dirige l'IA maintenant ? » (déjà dans « À valider »).
+### Mardi 24/11 — 18:00 — GÉOPOLITIQUE (produit le 24/11 en matinée, à la demande de Sébastien)
+**Jensen Huang revient chez Nvidia : qui a vraiment décidé ?** (slug `huang-retour`)
+- Le pilote « Nvidia sans Jensen Huang : qui dirige l'IA maintenant ? » est rendu caduc par la réintégration de Huang (23/11) : ne pas le publier.
+- Faits : réintégration à l'unanimité (8-K du 23/11), « avis des plus hauts niveaux du gouvernement », Trump « ils ont fait ce que nous voulions », +31 % en clôture (165,05 $), meilleure séance depuis 2003 ; audition au Sénat le 3/12.
+- Retour en arrière : histoire de Jensen Huang et de Nvidia (1993 → 2025).
 
 ### Jeudi 26/11 — 18:00 — ÉCONOMIE / ÉNERGIE
 **Détroit d'Ormuz : la crise qui peut faire flamber ton plein**

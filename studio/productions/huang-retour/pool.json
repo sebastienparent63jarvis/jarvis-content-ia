@@ -1,0 +1,360 @@
+[
+{
+"id": "p000",
+"file": "imgs/p000.jpg",
+"w": 1500,
+"h": 2100,
+"by": "Unknown authorUnknown author",
+"lic": "Public domain",
+"person": "cornyn"
+},
+{
+"id": "p001",
+"file": "imgs/p001.jpg",
+"w": 1538,
+"h": 2035,
+"by": "Gage Skidmore from Peoria, AZ, United States of America",
+"lic": "CC BY-SA 2.0",
+"person": "warren"
+},
+{
+"id": "p003",
+"file": "imgs/p003.jpg",
+"w": 1920,
+"h": 2885,
+"by": "US Government",
+"lic": "Public domain",
+"person": "banks"
+},
+{
+"id": "p022",
+"file": "imgs/p022.jpg",
+"w": 1638,
+"h": 2048,
+"by": "U.S. House of Representatives",
+"lic": "Public domain",
+"person": "garcia"
+},
+{
+"id": "p041",
+"file": "imgs/p041.jpg",
+"w": 1920,
+"h": 1278,
+"by": "Bill Koplitz",
+"lic": "Public domain"
+},
+{
+"id": "p048",
+"file": "imgs/p048.jpg",
+"w": 1920,
+"h": 1277,
+"by": "Architect of the Capitol",
+"lic": "Public domain"
+},
+{
+"id": "q000",
+"file": "imgs/q000.jpg",
+"w": 1536,
+"h": 2048,
+"by": "Daniel Torok",
+"lic": "Public domain",
+"person": "trump"
+},
+{
+"id": "q001",
+"file": "imgs/q001.jpg",
+"w": 1920,
+"h": 2400,
+"by": "United States Congress",
+"lic": "Public domain",
+"person": "ricketts"
+},
+{
+"id": "q002",
+"file": "imgs/q002.jpg",
+"w": 1500,
+"h": 2100,
+"by": "United States Department of the Treasury",
+"lic": "Public domain",
+"person": "bessent"
+},
+{
+"id": "q003",
+"file": "imgs/q003.jpg",
+"w": 1920,
+"h": 2627,
+"by": "Gage Skidmore",
+"lic": "CC BY-SA 4.0",
+"person": "musk"
+},
+{
+"id": "q033",
+"file": "imgs/q033.jpg",
+"w": 1920,
+"h": 1088,
+"by": "Don Ramey Logan",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "q034",
+"file": "imgs/q034.jpg",
+"w": 1920,
+"h": 2197,
+"by": "(top)Cezary p(bottom)MattWade",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "r000",
+"file": "imgs/r000.jpg",
+"w": 1745,
+"h": 2324,
+"by": "Anderseidesvik",
+"lic": "CC BY-SA 4.0",
+"person": "huang"
+},
+{
+"id": "r001",
+"file": "imgs/r001.jpg",
+"w": 1920,
+"h": 1175,
+"by": "Coolcaesar",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "r002",
+"file": "imgs/r002.jpg",
+"w": 1436,
+"h": 1915,
+"by": "Maryland GovPics",
+"lic": "CC BY 4.0",
+"person": "malach"
+},
+{
+"id": "r003",
+"file": "imgs/r003.jpg",
+"w": 1600,
+"h": 1200,
+"by": "Hyins",
+"lic": "Public domain"
+},
+{
+"id": "r004",
+"file": "imgs/r004.jpg",
+"w": 1340,
+"h": 893,
+"by": "Qdrddr",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "r007",
+"file": "imgs/r007.jpg",
+"w": 1920,
+"h": 1283,
+"by": "KTMAR",
+"lic": "CC BY 3.0"
+},
+{
+"id": "r010",
+"file": "imgs/r010.jpg",
+"w": 1920,
+"h": 1280,
+"by": "Aylakinn",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "r015",
+"file": "imgs/r015.jpg",
+"w": 1600,
+"h": 1600,
+"by": "Konstantin Lanzet",
+"lic": "CC BY-SA 3.0"
+},
+{
+"id": "r074",
+"file": "imgs/r074.jpg",
+"w": 1920,
+"h": 1562,
+"by": "Will Buckner",
+"lic": "CC BY 2.0"
+},
+{
+"id": "r083",
+"file": "imgs/r083.jpg",
+"w": 1920,
+"h": 1183,
+"by": "Jernej Furman from Slovenia",
+"lic": "CC BY 2.0"
+},
+{
+"id": "r130",
+"file": "imgs/r130.jpg",
+"w": 969,
+"h": 579,
+"by": "AquilaVeritas",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "r164",
+"file": "imgs/r164.jpg",
+"w": 1920,
+"h": 1212,
+"by": "Tony Webster",
+"lic": "CC BY 2.0"
+},
+{
+"id": "r198",
+"file": "imgs/r198.jpg",
+"w": 960,
+"h": 910,
+"by": "Dennys",
+"lic": "Public domain"
+},
+{
+"id": "r245",
+"file": "imgs/r245.jpg",
+"w": 1280,
+"h": 1707,
+"by": "DonSpencer1",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "r265",
+"file": "imgs/r265.jpg",
+"w": 1920,
+"h": 2560,
+"by": "Philafrenzy",
+"lic": "CC BY-SA 4.0"
+},
+{
+"id": "r280",
+"file": "imgs/r280.jpg",
+"w": 1920,
+"h": 1440,
+"by": "Anders Eidesvik",
+"lic": "CC BY 4.0",
+"person": "huang"
+},
+{
+"id": "r309",
+"file": "imgs/r309.jpg",
+"w": 1280,
+"h": 1707,
+"by": "ChrisDag",
+"lic": "CC BY 2.0"
+},
+{
+"id": "r323",
+"file": "imgs/r323.jpg",
+"w": 1920,
+"h": 1080,
+"by": "极客湾Geekerwan",
+"lic": "CC BY 3.0"
+},
+{
+"id": "r355",
+"file": "imgs/r355.jpg",
+"w": 1920,
+"h": 1280,
+"by": "PantheraLeo1359531",
+"lic": "CC BY 4.0"
+},
+{
+"id": "r374",
+"file": "imgs/r374.jpg",
+"w": 675,
+"h": 900,
+"by": "Rico Shen",
+"lic": "CC BY-SA 3.0",
+"person": "huang"
+},
+{
+"id": "r375",
+"file": "imgs/r375.jpg",
+"w": 1920,
+"h": 1080,
+"by": "Masaru Kamikura",
+"lic": "CC BY 2.0",
+"person": "huang"
+},
+{
+"id": "r376",
+"file": "imgs/r376.jpg",
+"w": 1280,
+"h": 854,
+"by": "NVIDIA Taiwan",
+"lic": "CC BY 2.0",
+"person": "huang"
+},
+{
+"id": "r399",
+"file": "imgs/r399.jpg",
+"w": 1350,
+"h": 1464,
+"by": "總統府",
+"lic": "CC BY 2.0",
+"person": "huang"
+},
+{
+"id": "r400",
+"file": "imgs/r400.jpg",
+"w": 1024,
+"h": 683,
+"by": "pestoverde",
+"lic": "CC BY 2.0",
+"person": "huang"
+},
+{
+"id": "r402",
+"file": "imgs/r402.jpg",
+"w": 4032,
+"h": 3024,
+"by": "Pronoia",
+"lic": "CC0 1.0",
+"person": "huang"
+},
+{
+"id": "r406",
+"file": "imgs/r406.jpg",
+"w": 5184,
+"h": 3456,
+"by": "Maurizio Pesce",
+"lic": "CC BY 2.0",
+"person": "huang"
+},
+{
+"id": "r411",
+"file": "imgs/r411.jpg",
+"w": 4032,
+"h": 3024,
+"by": "Pronoia",
+"lic": "CC0 1.0",
+"person": "huang"
+},
+{
+"id": "r413",
+"file": "imgs/r413.jpg",
+"w": 1024,
+"h": 678,
+"by": "Open Grid Scheduler / Grid Engine",
+"lic": "CC0 1.0",
+"person": "huang"
+},
+{
+"id": "r458",
+"file": "imgs/r458.jpg",
+"w": 1024,
+"h": 683,
+"by": "chang_sen",
+"lic": "CC BY 2.0",
+"person": "huang"
+},
+{
+"id": "r377",
+"file": "imgs/r377.jpg",
+"w": 1280,
+"h": 854,
+"by": "NVIDIA Taiwan",
+"lic": "CC BY 2.0",
+"person": "huang"
+}
+]
