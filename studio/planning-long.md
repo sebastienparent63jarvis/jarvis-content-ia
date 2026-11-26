@@ -30,6 +30,7 @@ dirigeant politique ou un État.
 - Retour en arrière : pourquoi Ormuz est un verrou depuis 1979 (révolution iranienne, guerre des tankers des années 1980, sanctions), intérêts de l'Iran, des pétromonarchies et des États-Unis.
 - Angle : pourquoi 50 km de mer pèsent sur le prix de l'essence en France ; qui y gagne, qui y perd.
 - Cartes : Ormuz, Iran, Arabie saoudite, Moyen-Orient. À vérifier le jour J : baril, fret, déclarations AIE.
+- **Produit le 26/11 au matin** (slug `ormuz-plein`) : « Détroit d'Ormuz : pourquoi ton plein dépend de 34 km de mer ». Dernière heure intégrée : mines revendiquées par les Gardiens de la révolution le 25/11 (2 pétroliers), 3 navires touchés selon l'UKMTO, Houthis contre Ras Tanura, Brent +3,5 % puis 94,71 $, conditions de Téhéran (levée du blocus, réouverture sous 48 h via le Qatar), gazole à 2,13 € le 23/11.
 
 ### Dimanche 29/11 — 11:00 — TECH / ENTREPRISES
 **Anthropic : de la start-up dissidente à la plus grosse introduction en Bourse de l'histoire**
